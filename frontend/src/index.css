@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+/* Brand tokens are CSS variables set at runtime from the active business theme (see lib/theme.js).
+   Switching business swaps these values and the whole workspace re-themes instantly. */
+:root {
+  --brand: #2563eb;
+  --brand-2: #0f172a;
+  --accent: #f59e0b;
+  --brand-fg: #ffffff;
+  --brand-soft: color-mix(in oklab, var(--brand) 12%, white);
+  --font: 'Inter';
+  --radius: 0.6rem;
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-2: var(--brand-2);
+  --color-accent: var(--accent);
+  --color-brand-fg: var(--brand-fg);
+  --color-brand-soft: var(--brand-soft);
+  --font-sans: var(--font), ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
+  --radius-brand: var(--radius);
+}
+
+/* Base text size; the A / A+ / A++ switch in the top bar scales everything (rem-based). */
+html { font-size: var(--text-scale, 106.25%); }
+html, body, #root { height: 100%; }
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+  font-family: var(--font-sans);
+}
+
+/* In the components layer so utility classes (pl-9, w-24, py-1 …) can override them.
+   Sized for comfortable reading: 15px text, 44px-tall inputs, roomy table rows. */
+@layer components {
+  .input {
+    @apply min-h-11 w-full rounded-[var(--radius)] border border-slate-300 bg-white px-3.5 py-2.5 text-[0.9375rem] text-slate-900 outline-none transition
+      placeholder:text-slate-500 focus:border-brand focus:ring-4 focus:ring-brand/15 disabled:bg-slate-100;
+  }
+  .label { @apply mb-1.5 block text-sm font-semibold text-slate-700; }
+  .card { @apply rounded-[var(--radius)] border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]; }
+  .table-base { @apply w-full text-left text-[0.9375rem]; }
+  .table-base th { @apply bg-slate-50 px-3.5 py-3 text-[0.8125rem] font-semibold uppercase tracking-wide text-slate-600; }
+  .table-base td { @apply border-t border-slate-100 px-3.5 py-3 align-middle; }
+  .table-base tbody tr:hover { @apply bg-brand-soft/40; }
+}
+
+/* Readability for a 35-65 audience: lighter greys are darkened so secondary text keeps good contrast. */
+@layer utilities {
+  .text-slate-400 { color: var(--color-slate-500); }
+  .text-slate-500 { color: var(--color-slate-600); }
+  .text-\[11px\] { font-size: 12px; }
+}
+
+/* Storefront uses its own dark mode when the theme says so. */
+.store-dark { color-scheme: dark; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+
+@media print {
+  .no-print { display: none !important; }
+}

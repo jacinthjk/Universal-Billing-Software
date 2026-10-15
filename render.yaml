@@ -1,0 +1,46 @@
+# Render Blueprint: one web service that builds the React app and serves it from the API
+# (see README → Single-service production deploy). The Postgres database already exists on Render,
+# so it is linked through DATABASE_URL rather than created here.
+services:
+  - type: web
+    name: universal-billing
+    runtime: node
+    region: oregon # same region as the database
+    # Starter or above: the free plan sleeps after 15 idle minutes, which stops the daily-report
+    # scheduler and disconnects linked WhatsApp, and it has no persistent disk for uploads.
+    plan: starter
+    buildCommand: cd frontend && npm ci && npm run build && cd ../backend && npm ci && npx prisma generate
+    startCommand: cd backend && npm start
+    healthCheckPath: /api/health
+    disk:
+      name: storage
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false # paste the database's Internal Database URL
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: STORAGE_DIR
+        value: /var/data/storage
+      # Set these three to the service URL, e.g. https://universal-billing.onrender.com
+      - key: PUBLIC_APP_URL
+        sync: false
+      - key: PUBLIC_API_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: PAYMENT_PROVIDER
+        value: manual
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
