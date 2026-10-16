@@ -9,7 +9,8 @@ services:
     # Starter or above: the free plan sleeps after 15 idle minutes, which stops the daily-report
     # scheduler and disconnects linked WhatsApp, and it has no persistent disk for uploads.
     plan: starter
-    buildCommand: cd frontend && npm ci && npm run build && cd ../backend && npm ci && npx prisma generate
+    # --include=dev: NODE_ENV=production makes npm skip devDependencies, but the build needs vite and prisma.
+    buildCommand: cd frontend && npm ci --include=dev && npm run build && cd ../backend && npm ci --include=dev && npx prisma generate
     startCommand: cd backend && npm start
     healthCheckPath: /api/health
     disk:
