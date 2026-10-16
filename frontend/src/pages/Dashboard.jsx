@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom'
 import {
   Search, UserPlus, PackagePlus, ShoppingBag, BarChart3, Banknote, QrCode, CreditCard, Wallet, Landmark, User, Users, Trophy, Crown,
-  BellRing, PackageX, AlertTriangle, CheckCircle2, ArrowRight, TrendingUp, TrendingDown, Gauge, PiggyBank,
+  BellRing, PackageX, AlertTriangle, CheckCircle2, ArrowRight, TrendingUp, TrendingDown, Gauge, PiggyBank, HandCoins, CalendarClock,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useBusinessIcons, CategoryIcon } from '../lib/businessIcons'
 import { Spinner, useFetch } from '../components/ui'
+import DashboardSpotlight from '../components/DashboardSpotlight'
 import { money } from '../lib/format'
 
 // ─────────────── Greeting ───────────────
@@ -54,7 +55,7 @@ function GlanceCard({ icon: Icon, title, tint, children, value, caption }) {
         <span className="flex size-8 items-center justify-center rounded-lg" style={{ background: `${tint}1f`, color: tint }}><Icon className="size-4.5" /></span>
         <h3 className="text-[0.9375rem] font-bold text-slate-800">{title}</h3>
       </div>
-      <div className="flex h-36 items-center justify-center py-2">{children}</div>
+      <div className="flex h-28 items-center justify-center py-2 sm:h-36">{children}</div>
       <div className="mt-auto border-t border-slate-100 pt-2.5 text-center">
         <div className="text-xl font-extrabold tracking-tight text-slate-900">{value}</div>
         <div className="text-sm text-slate-600">{caption}</div>
@@ -227,13 +228,20 @@ function TodayAtAGlance({ m }) {
 
 // ─────────────── Needs your attention ───────────────
 
-function Attention({ m, followups }) {
-  const { can, hasModule } = useAuth()
+// Businesses that sell on credit or bill after the work see unpaid bills here; those with shelf-life stock see expiry.
+const CREDIT_TYPES = ['SERVICE', 'DENTAL', 'WHOLESALE']
+const EXPIRY_TYPES = ['PHARMACY', 'GROCERY', 'BEAUTY']
+
+function Attention({ m, followups, extras }) {
+  const { business, can, hasModule, t } = useAuth()
+  const stockOn = hasModule('inventory') && can('inventory.view')
   const items = [
     { to: '/orders', icon: ShoppingBag, n: m.online.pending, label: 'Online orders waiting', color: 'rose', show: hasModule('orders') && can('orders.view') },
-    { to: '/enquiries', icon: BellRing, n: followups, label: 'Follow-ups to do', color: 'amber', show: hasModule('enquiries') && can('enquiries.view') },
-    { to: '/inventory', icon: AlertTriangle, n: m.stock.low, label: 'Running low', color: 'orange', show: hasModule('inventory') && can('inventory.view') },
-    { to: '/inventory', icon: PackageX, n: m.stock.out, label: 'Out of stock', color: 'red', show: hasModule('inventory') && can('inventory.view') },
+    { to: '/enquiries', icon: BellRing, n: followups, label: business.type === 'DENTAL' ? 'Recalls to make' : 'Follow-ups to do', color: 'amber', show: hasModule('enquiries') && can('enquiries.view') },
+    { to: '/sales', icon: HandCoins, n: extras?.dues?.count || 0, label: `Unpaid ${t('invoice').toLowerCase()}s`, color: 'amber', show: !!extras?.dues && CREDIT_TYPES.includes(business.type) },
+    { to: '/inventory', icon: CalendarClock, n: (extras?.expiry.expired || 0) + (extras?.expiry.within30 || 0), label: 'Expiring within 30 days', color: 'red', show: stockOn && !!extras && EXPIRY_TYPES.includes(business.type) },
+    { to: '/inventory', icon: AlertTriangle, n: m.stock.low, label: 'Running low', color: 'orange', show: stockOn },
+    { to: '/inventory', icon: PackageX, n: m.stock.out, label: 'Out of stock', color: 'red', show: stockOn },
   ].filter((x) => x.show)
   const pending = items.filter((x) => x.n > 0)
   const tone = { rose: 'bg-rose-100 text-rose-700', amber: 'bg-amber-100 text-amber-700', orange: 'bg-orange-100 text-orange-700', red: 'bg-red-100 text-red-700' }
@@ -250,7 +258,7 @@ function Attention({ m, followups }) {
                 <Icon className="size-6" />
                 <span className="absolute -right-1.5 -top-1.5 flex min-w-6 items-center justify-center rounded-full bg-red-600 px-1.5 text-xs font-bold text-white ring-2 ring-white">{n}</span>
               </span>
-              <span className="text-base font-semibold leading-tight text-slate-800">{label}</span>
+              <span className="text-sm font-semibold leading-tight text-slate-800 sm:text-base">{label}</span>
             </Link>
           ))}
         </div>
@@ -281,11 +289,11 @@ function Shortcuts() {
   return (
     <section aria-labelledby="quick-title">
       <h2 id="quick-title" className="mb-3 text-lg font-bold text-slate-800">Quick start</h2>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 xl:grid-cols-6">
         {tiles.map(({ to, icon: Icon, color, title }) => (
-          <Link key={to} to={to} className="card flex flex-col items-center gap-2 px-2 py-4 text-center transition hover:-translate-y-0.5 hover:border-brand hover:shadow-md focus-visible:ring-4 focus-visible:ring-brand/30">
-            <span className={`flex size-14 items-center justify-center rounded-2xl ${TILE_COLORS[color]}`}><Icon className="size-7" /></span>
-            <span className="text-base font-bold leading-tight text-slate-900">{title}</span>
+          <Link key={to} to={to} className="card flex flex-col items-center gap-2 px-1.5 py-3 text-center sm:px-2 sm:py-4 transition hover:-translate-y-0.5 hover:border-brand hover:shadow-md focus-visible:ring-4 focus-visible:ring-brand/30">
+            <span className={`flex size-11 items-center justify-center rounded-2xl sm:size-14 ${TILE_COLORS[color]}`}><Icon className="size-6 sm:size-7" /></span>
+            <span className="text-sm font-bold leading-tight text-slate-900 sm:text-base">{title}</span>
           </Link>
         ))}
       </div>
@@ -298,10 +306,11 @@ export default function Dashboard() {
   const { data, loading } = useFetch('/reports/dashboard')
   if (loading || !data) return <Spinner />
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-6xl space-y-5 sm:space-y-6">
       <Greeting name={user.name.split(' ')[0]} />
       <TodayAtAGlance m={data.metrics} />
-      <Attention m={data.metrics} followups={data.followupsDue.length} />
+      <Attention m={data.metrics} followups={data.followupsDue.length} extras={data.extras} />
+      <DashboardSpotlight data={data} />
       <Shortcuts />
     </div>
   )

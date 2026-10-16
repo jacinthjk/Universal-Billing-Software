@@ -6,7 +6,7 @@ const { validate } = require('../middleware/validate');
 const { requirePerm } = require('../middleware/tenant');
 const { todayIn, addDays, dayRange, n } = require('../lib/util');
 const storage = require('../lib/storage');
-const { rangeMetrics, dailyMetrics, aiSummary } = require('../services/reports');
+const { rangeMetrics, dailyMetrics, aiSummary, dashboardExtras } = require('../services/reports');
 const { generateDailyReport, reportPath } = require('../services/dailyReport');
 const { overviewExport, buildWorkbook } = require('../services/reportExports');
 const { deliverDailyReport, maskNumber } = require('../services/reportDelivery');
@@ -29,18 +29,22 @@ function range(req) {
 router.get('/dashboard', requirePerm('dashboard.view'), ah(async (req, res) => {
   const today = todayIn(req.business.timezone);
   const m = await dailyMetrics(req.business, today);
-  const [followupsDue, recentSales, notifications] = await Promise.all([
+  const [followupsDue, recentSales, notifications, extras] = await Promise.all([
     prisma.enquiry.findMany({ where: { businessId: req.businessId, status: { notIn: ['CONVERTED', 'CLOSED'] }, followUpAt: { lte: dayRange(today, req.business.timezone).end } }, orderBy: { followUpAt: 'asc' }, take: 8 }),
     req.can('sales.view') ? prisma.sale.findMany({ where: { businessId: req.businessId }, orderBy: { createdAt: 'desc' }, take: 8, include: { customer: { select: { name: true } } } }) : [],
     prisma.notification.findMany({ where: { businessId: req.businessId }, orderBy: { createdAt: 'desc' }, take: 10 }),
+    dashboardExtras(req.business, today),
   ]);
+  // Business-type spotlight cards only show what this person is allowed to see.
+  if (!req.can('sales.view')) delete extras.dues;
+  if (!req.can('customers.view')) delete extras.topCustomers;
   if (!req.can('products.view_cost')) delete m.stock.value;
   if (!req.can('reports.view')) {
     // Operational staff see counts, not revenue breakdowns.
     delete m.purchases;
     delete m.prevSales;
   }
-  res.json({ metrics: m, followupsDue, recentSales, notifications });
+  res.json({ metrics: m, followupsDue, recentSales, notifications, extras });
 }));
 
 router.get('/summary', requirePerm('reports.view'), ah(async (req, res) => {

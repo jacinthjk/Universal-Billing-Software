@@ -71,18 +71,67 @@ function NavItem({ to, label, hint, icon: Icon, end, onNavigate }) {
   )
 }
 
-// A / A+ / A++ text size switch (remembered on this device).
-function TextSizeSwitch() {
+// Text size is shared by every switch on screen (header, mobile menu) so they never disagree.
+function useTextSize() {
   const [size, setSize] = useState(getTextSize())
+  useEffect(() => {
+    const sync = () => setSize(getTextSize())
+    window.addEventListener('ubb:textsize', sync)
+    return () => window.removeEventListener('ubb:textsize', sync)
+  }, [])
+  const choose = (key) => { setSize(applyTextSize(key)); window.dispatchEvent(new Event('ubb:textsize')) }
+  return [size, choose]
+}
+
+// A / A+ / A++ text size switch (remembered on this device).
+function TextSizeSwitch({ className = 'hidden sm:flex', dark }) {
+  const [size, choose] = useTextSize()
   return (
-    <div className="hidden items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 sm:flex" role="group" aria-label="Text size">
-      <Type className="mx-1 size-4 text-slate-500" aria-hidden="true" />
+    <div className={`items-center gap-1 rounded-xl border p-1 ${dark ? 'border-white/15 bg-white/10' : 'border-slate-200 bg-slate-50'} ${className}`} role="group" aria-label="Text size">
+      <Type className={`mx-1 size-4 ${dark ? 'text-white/70' : 'text-slate-500'}`} aria-hidden="true" />
       {TEXT_SIZES.map((t, i) => (
-        <button key={t.key} onClick={() => setSize(applyTextSize(t.key))} title={t.title} aria-pressed={size === t.key}
-          className={`min-w-9 rounded-lg px-2 py-1 font-bold transition ${size === t.key ? 'bg-brand text-brand-fg shadow-sm' : 'text-slate-700 hover:bg-white'}`}
+        <button key={t.key} onClick={() => choose(t.key)} title={t.title} aria-pressed={size === t.key}
+          className={`min-w-9 flex-1 rounded-lg px-2 py-1 font-bold transition ${size === t.key ? 'bg-brand text-brand-fg shadow-sm' : dark ? 'text-white/85 hover:bg-white/10' : 'text-slate-700 hover:bg-white'}`}
           style={{ fontSize: `${13 + i * 2}px` }}>{t.label}</button>
       ))}
     </div>
+  )
+}
+
+// Phones: one small button that steps A → A+ → A++ → A.
+function TextSizeCycle() {
+  const [size, choose] = useTextSize()
+  const i = Math.max(TEXT_SIZES.findIndex((t) => t.key === size), 0)
+  const next = TEXT_SIZES[(i + 1) % TEXT_SIZES.length]
+  return (
+    <button onClick={() => choose(next.key)} aria-label={`Text size: ${TEXT_SIZES[i].title}. Tap for ${next.title.toLowerCase()}`}
+      className="flex h-10 items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2.5 font-bold text-slate-700 active:bg-white sm:hidden">
+      <Type className="size-4 text-slate-500" aria-hidden="true" />
+      <span className="min-w-7 text-center text-sm">{TEXT_SIZES[i].label}</span>
+    </button>
+  )
+}
+
+// Phones and tablets: the four things people do most, always one tap away at the bottom.
+function BottomBar({ onMenu }) {
+  const { can, hasModule, t } = useAuth()
+  const bi = useBusinessIcons()
+  const navigate = useNavigate()
+  const canSell = hasModule('pos') && can('pos.sell')
+  const tab = ({ isActive }) => `flex min-w-0 flex-1 flex-col items-center gap-0.5 py-1.5 text-[0.6875rem] font-semibold ${isActive ? 'text-brand' : 'text-slate-600'}`
+  return (
+    <nav className="no-print flex shrink-0 items-stretch border-t border-slate-200 bg-white px-1 pb-[env(safe-area-inset-bottom)] lg:hidden" aria-label="Quick">
+      <NavLink to="/" end className={tab}><Home className="size-5.5" /><span className="truncate">Home</span></NavLink>
+      {can('sales.view') && <NavLink to="/sales" className={tab}><bi.sale className="size-5.5" /><span className="truncate">{t('invoice')}s</span></NavLink>}
+      {canSell && (
+        <button onClick={() => navigate('/pos')} className="flex flex-1 flex-col items-center gap-0.5 py-1 text-[0.6875rem] font-bold text-brand" aria-label={`New ${t('invoice').toLowerCase()}`}>
+          <span className="-mt-5 flex size-12 items-center justify-center rounded-2xl bg-brand text-brand-fg shadow-lg ring-4 ring-white"><PlusCircle className="size-6" /></span>
+          <span className="truncate">New</span>
+        </button>
+      )}
+      {hasModule('customers') && can('customers.view') && <NavLink to="/customers" className={tab}><bi.customers className="size-5.5" /><span className="truncate">{t('customers')}</span></NavLink>}
+      <button onClick={onMenu} className="flex min-w-0 flex-1 flex-col items-center gap-0.5 py-1.5 text-[0.6875rem] font-semibold text-slate-600"><Menu className="size-5.5" /><span>More</span></button>
+    </nav>
   )
 }
 
@@ -182,8 +231,9 @@ export default function Layout() {
   const canSell = hasModule('pos') && can('pos.sell')
 
   const sidebar = (
-    <aside className="flex h-full w-72 flex-col bg-brand-2 p-3 text-white">
+    <aside className="flex h-full w-[min(18rem,calc(100vw-3.5rem))] flex-col bg-brand-2 p-3 text-white">
       <BusinessSwitcher />
+      <TextSizeSwitch dark className="mt-3 flex lg:hidden" />
       {canSell && (
         <button onClick={() => navigate('/pos')}
           className="mt-3 flex items-center justify-center gap-2.5 rounded-xl bg-brand px-4 py-3 text-base font-bold text-brand-fg shadow-md ring-1 ring-white/20 transition hover:brightness-110">
@@ -226,19 +276,20 @@ export default function Layout() {
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-4">
-          <button className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-2 text-sm font-semibold hover:bg-slate-100 lg:hidden" onClick={() => setMobile(true)} aria-label="Open menu">
-            <Menu className="size-5" /> Menu
+        <header className="no-print flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 sm:h-16 sm:gap-3 sm:px-4">
+          <button className="flex h-10 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 text-sm font-semibold hover:bg-slate-100 lg:hidden" onClick={() => setMobile(true)} aria-label="Open menu">
+            <Menu className="size-5" /> <span className="hidden sm:inline">Menu</span>
           </button>
           <div className="flex min-w-0 items-center gap-2.5">
-            <BusinessMark logoUrl={business.logoUrl} theme={business.theme} className="size-9" iconClass="size-5" rounded="rounded-lg" />
+            <span className="hidden min-[400px]:block"><BusinessMark logoUrl={business.logoUrl} theme={business.theme} className="size-9" iconClass="size-5" rounded="rounded-lg" /></span>
             <div className="min-w-0">
               <div className="truncate text-base font-bold leading-tight">{business.name}</div>
               <div className="hidden truncate text-xs text-slate-500 sm:block">All information shown belongs to this business</div>
             </div>
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
             <TextSizeSwitch />
+            <TextSizeCycle />
             {canSell && location.pathname !== '/pos' && (
               <button onClick={() => navigate('/pos')} className="hidden items-center gap-2 rounded-xl bg-brand px-3.5 py-2 text-sm font-bold text-brand-fg hover:brightness-110 md:flex">
                 <bi.pos className="size-4.5" /> New {t('invoice').toLowerCase()}
@@ -248,9 +299,10 @@ export default function Layout() {
           </div>
         </header>
         {/* key forces every page to remount (and refetch) when the active business changes */}
-        <main key={business.id} className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+        <main key={business.id} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
           <Outlet />
         </main>
+        {location.pathname !== '/pos' && <BottomBar onMenu={() => setMobile(true)} />}
       </div>
     </div>
   )

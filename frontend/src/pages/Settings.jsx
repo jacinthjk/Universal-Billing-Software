@@ -67,7 +67,7 @@ function Branding() {
       </Card>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card title="Customise">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {['primary', 'secondary', 'accent'].map((k) => (
               <Field key={k} label={titleCase(k)}><input type="color" value={th[k]} onChange={(e) => preview({ ...th, [k]: e.target.value })} className="h-10 w-full cursor-pointer rounded border border-slate-300" /></Field>
             ))}

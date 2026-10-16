@@ -25,6 +25,13 @@
 /* Base text size; the A / A+ / A++ switch in the top bar scales everything (rem-based). */
 html { font-size: var(--text-scale, 106.25%); }
 html, body, #root { height: 100%; }
+/* Phones: dynamic viewport height so the browser's address bar never hides the bottom bar. */
+#root { height: 100dvh; }
+/* Phones: one notch smaller base so the larger sizes (A+ / A++) still fit a narrow screen. */
+@media (max-width: 639px) {
+  html { font-size: calc(var(--text-scale, 106.25%) * 0.94); }
+  .table-base th, .table-base td { @apply px-3 py-2.5 whitespace-nowrap; }
+}
 body {
   @apply bg-slate-50 text-slate-900 antialiased;
   font-family: var(--font-sans);

@@ -78,7 +78,7 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }) {
   const widths = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-5xl' }
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
-      <div className={`flex max-h-[92vh] w-full ${widths[size]} flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl`}>
+      <div className={`flex max-h-[92dvh] w-full ${widths[size]} flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl`}>
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
           <h3 className="font-semibold">{title}</h3>
           <button onClick={onClose} className="rounded-md p-1 text-slate-400 hover:bg-slate-100" aria-label="Close"><X className="size-5" /></button>

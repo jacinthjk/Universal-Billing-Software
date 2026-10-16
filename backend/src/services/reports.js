@@ -1,6 +1,6 @@
 // Reusable metrics engine for dashboards, report screens and the automated daily report.
 const { prisma } = require('../lib/prisma');
-const { n, round2, dayRange, addDays, todayIn } = require('../lib/util');
+const { n, round2, dayRange, addDays, todayIn, timeIn } = require('../lib/util');
 const { stockStatus } = require('./stock');
 
 const ACTIVE_SALE = { not: 'CANCELLED' };
@@ -213,4 +213,86 @@ async function rangeMetrics(business, from, to) {
   };
 }
 
-module.exports = { dailyMetrics, rangeMetrics, stockSnapshot, aiSummary, salesSummary };
+// Today's sales split by hour of day (business timezone) - "busy hours" / "rush hours".
+async function hourlySales(business, date) {
+  const { start, end } = dayRange(date, business.timezone);
+  const sales = await prisma.sale.findMany({
+    where: { businessId: business.id, createdAt: { gte: start, lt: end }, status: ACTIVE_SALE },
+    select: { createdAt: true, total: true },
+  });
+  const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, sales: 0, bills: 0 }));
+  for (const s of sales) {
+    const h = Number(timeIn(business.timezone, s.createdAt).slice(0, 2)) % 24;
+    hours[h].sales = round2(hours[h].sales + n(s.total));
+    hours[h].bills += 1;
+  }
+  return hours;
+}
+
+// Unpaid and part-paid bills - money still to collect.
+async function duesSummary(businessId) {
+  const sales = await prisma.sale.findMany({
+    where: { businessId, status: ACTIVE_SALE, paymentStatus: { in: ['UNPAID', 'PARTIAL'] } },
+    select: { id: true, number: true, total: true, paidAmount: true, createdAt: true, billName: true, customer: { select: { id: true, name: true, phone: true } } },
+    orderBy: { createdAt: 'asc' },
+    take: 500,
+  });
+  const rows = sales.map((s) => ({
+    saleId: s.id, number: s.number, createdAt: s.createdAt, due: round2(n(s.total) - n(s.paidAmount)),
+    name: s.customer?.name || s.billName || 'Walk-in', customerId: s.customer?.id || null,
+  })).filter((r) => r.due > 0);
+  return { amount: round2(rows.reduce((a, r) => a + r.due, 0)), count: rows.length, top: [...rows].sort((a, b) => b.due - a.due).slice(0, 5) };
+}
+
+// Batches already expired or expiring within 90 days.
+async function expiryWatch(businessId) {
+  const now = Date.now();
+  const batches = await prisma.productBatch.findMany({
+    where: { businessId, qty: { gt: 0 }, expiryDate: { lte: new Date(now + 90 * 86400000) } },
+    select: { id: true, batchNo: true, expiryDate: true, qty: true, product: { select: { id: true, name: true, unit: true } } },
+    orderBy: { expiryDate: 'asc' },
+    take: 200,
+  });
+  const items = batches.map((b) => ({
+    id: b.id, batchNo: b.batchNo, productId: b.product.id, name: b.product.name, unit: b.product.unit, qty: n(b.qty),
+    expiryDate: b.expiryDate, days: Math.ceil((b.expiryDate.getTime() - now) / 86400000),
+  }));
+  return {
+    expired: items.filter((i) => i.days <= 0).length,
+    within30: items.filter((i) => i.days > 0 && i.days <= 30).length,
+    within90: items.filter((i) => i.days > 30).length,
+    items: items.slice(0, 6),
+  };
+}
+
+// Customers who spent the most in the last 30 days.
+async function topCustomers(business, date) {
+  const start = dayRange(addDays(date, -29), business.timezone).start;
+  const end = dayRange(date, business.timezone).end;
+  const rows = await prisma.sale.groupBy({
+    by: ['customerId'],
+    where: { businessId: business.id, customerId: { not: null }, createdAt: { gte: start, lt: end }, status: ACTIVE_SALE },
+    _sum: { total: true }, _count: true,
+    orderBy: { _sum: { total: 'desc' } },
+    take: 5,
+  });
+  const customers = await prisma.customer.findMany({ where: { id: { in: rows.map((r) => r.customerId) } }, select: { id: true, name: true, visitCount: true } });
+  const byId = Object.fromEntries(customers.map((c) => [c.id, c]));
+  return rows.map((r) => ({ id: r.customerId, name: byId[r.customerId]?.name || 'Customer', value: round2(n(r._sum.total)), bills: r._count, visits: byId[r.customerId]?.visitCount || 0 }));
+}
+
+/** Business-type spotlight data for the home dashboard (each type shows a subset). */
+async function dashboardExtras(business, date) {
+  const weekStart = dayRange(addDays(date, -6), business.timezone).start;
+  const { end } = dayRange(date, business.timezone);
+  const [hourly, dues, expiry, week, customers] = await Promise.all([
+    hourlySales(business, date),
+    duesSummary(business.id),
+    expiryWatch(business.id),
+    itemPerformance(business.id, weekStart, end),
+    topCustomers(business, date),
+  ]);
+  return { hourly, dues, expiry, week: { top: week.topByValue.slice(0, 5), categories: week.categories.slice(0, 6) }, topCustomers: customers };
+}
+
+module.exports = { dailyMetrics, rangeMetrics, stockSnapshot, aiSummary, salesSummary, dashboardExtras };

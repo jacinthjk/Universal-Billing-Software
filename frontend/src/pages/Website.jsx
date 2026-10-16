@@ -141,7 +141,7 @@ function WebsiteSettings() {
             <Field label="Returns policy"><Textarea value={w.policies.returns} onChange={(e) => setW({ ...w, policies: { ...w.policies, returns: e.target.value } })} /></Field>
             <Field label="Shipping policy"><Textarea value={w.policies.shipping} onChange={(e) => setW({ ...w, policies: { ...w.policies, shipping: e.target.value } })} /></Field>
             <Field label="Privacy policy"><Textarea value={w.policies.privacy} onChange={(e) => setW({ ...w, policies: { ...w.policies, privacy: e.target.value } })} /></Field>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid gap-2 sm:grid-cols-3">
               {['instagram', 'facebook', 'whatsapp'].map((s) => <Field key={s} label={s}><Input value={w.social[s]} onChange={(e) => setW({ ...w, social: { ...w.social, [s]: e.target.value } })} /></Field>)}
             </div>
             <Field label="SEO title"><Input value={w.seo.title} onChange={(e) => setW({ ...w, seo: { ...w.seo, title: e.target.value } })} /></Field>

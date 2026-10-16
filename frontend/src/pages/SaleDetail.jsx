@@ -135,7 +135,7 @@ export default function SaleDetail() {
                 ))}
               </tbody>
             </table>
-            <div className="ml-auto mt-3 w-64 space-y-1 text-sm">
+            <div className="ml-auto mt-3 w-full max-w-64 space-y-1 text-sm">
               <div className="flex justify-between"><span>Subtotal</span><span>{money(invoice.subtotal, currency)}</span></div>
               {invoice.discount > 0 && <div className="flex justify-between"><span>Discount</span><span>-{money(invoice.discount, currency)}</span></div>}
               <div className="flex justify-between"><span>Tax</span><span>{money(invoice.tax, currency)}</span></div>
