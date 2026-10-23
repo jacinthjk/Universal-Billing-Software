@@ -145,6 +145,10 @@ const STATUS_META = {
   QUALIFIED: ['amber', Star, 'Qualified'], HIGH_INTENT: ['red', Flame, 'Hot lead'], QUOTATION: ['blue', FileText, 'Quoted'],
   CLOSED: ['gray', Archive, 'Closed'], ORDERED: ['blue', ShoppingCart, 'Ordered'], HANDOFF: ['red', Hand, 'Needs staff'],
   STAFF: ['violet', UserCheck, 'Staff replying'], AI: ['brand', Bot, 'AI handling'], HIGH: ['red', Flame, 'High'],
+  // Attendance & leave
+  PRESENT: ['green', UserCheck, 'Present'], HALF_DAY: ['amber', CircleDashed, 'Half day'], ABSENT: ['red', XCircle, 'Absent'],
+  LEAVE: ['violet', Archive, 'On leave'], HOLIDAY: ['blue', Star, 'Holiday'], WEEK_OFF: ['gray', Clock, 'Week off'],
+  NOT_MARKED: ['gray', CircleDashed, 'Not marked'], APPROVED: ['green', CheckCircle2, 'Approved'], REJECTED: ['red', XCircle, 'Rejected'],
 }
 export function StatusBadge({ status }) {
   if (!status) return null

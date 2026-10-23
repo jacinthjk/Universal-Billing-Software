@@ -281,6 +281,48 @@ async function topCustomers(business, date) {
   return rows.map((r) => ({ id: r.customerId, name: byId[r.customerId]?.name || 'Customer', value: round2(n(r._sum.total)), bills: r._count, visits: byId[r.customerId]?.visitCount || 0 }));
 }
 
+// Days a bill has been unpaid, counted in calendar days in the business timezone.
+const OVERDUE_DAYS = 30;
+const AGE_BUCKETS = [['0-30 days', 0, 30], ['31-60 days', 31, 60], ['61-90 days', 61, 90], ['Over 90 days', 91, Infinity]];
+
+/** Every unpaid / part-paid bill with its outstanding days, ageing buckets and a per-customer roll-up. */
+async function outstandingReport(business) {
+  const today = todayIn(business.timezone);
+  const sales = await prisma.sale.findMany({
+    where: { businessId: business.id, status: ACTIVE_SALE, paymentStatus: { in: ['UNPAID', 'PARTIAL'] } },
+    select: { id: true, number: true, createdAt: true, total: true, paidAmount: true, paymentStatus: true, billName: true, billPhone: true, customer: { select: { id: true, name: true, phone: true } } },
+    orderBy: { createdAt: 'asc' },
+    take: 5000,
+  });
+  const bills = sales.map((s) => {
+    const billDate = todayIn(business.timezone, s.createdAt);
+    const days = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${billDate}T00:00:00Z`)) / 86400000);
+    return {
+      saleId: s.id, number: s.number, date: billDate, customerId: s.customer?.id || null, name: s.customer?.name || s.billName || 'Walk-in',
+      phone: s.customer?.phone || s.billPhone || null, total: round2(n(s.total)), paid: round2(n(s.paidAmount)), due: round2(n(s.total) - n(s.paidAmount)),
+      days, overdue: days > OVERDUE_DAYS, paymentStatus: s.paymentStatus,
+    };
+  }).filter((b) => b.due > 0).sort((a, b) => b.days - a.days);
+  const buckets = AGE_BUCKETS.map(([label, lo, hi]) => {
+    const inB = bills.filter((b) => b.days >= lo && b.days <= hi);
+    return { label, count: inB.length, amount: round2(inB.reduce((s, b) => s + b.due, 0)) };
+  });
+  const byCustomer = {};
+  for (const b of bills) {
+    const k = b.customerId || `${b.name}|${b.phone || ''}`;
+    byCustomer[k] = byCustomer[k] || { customerId: b.customerId, name: b.name, phone: b.phone, bills: 0, due: 0, oldestDays: 0 };
+    byCustomer[k].bills += 1;
+    byCustomer[k].due = round2(byCustomer[k].due + b.due);
+    byCustomer[k].oldestDays = Math.max(byCustomer[k].oldestDays, b.days);
+  }
+  const overdue = bills.filter((b) => b.overdue);
+  return {
+    asOf: today, overdueAfter: OVERDUE_DAYS, bills, buckets,
+    customers: Object.values(byCustomer).sort((a, b) => b.due - a.due),
+    totals: { count: bills.length, due: round2(bills.reduce((s, b) => s + b.due, 0)), overdueCount: overdue.length, overdueDue: round2(overdue.reduce((s, b) => s + b.due, 0)) },
+  };
+}
+
 /** Business-type spotlight data for the home dashboard (each type shows a subset). */
 async function dashboardExtras(business, date) {
   const weekStart = dayRange(addDays(date, -6), business.timezone).start;
@@ -295,4 +337,4 @@ async function dashboardExtras(business, date) {
   return { hourly, dues, expiry, week: { top: week.topByValue.slice(0, 5), categories: week.categories.slice(0, 6) }, topCustomers: customers };
 }
 
-module.exports = { dailyMetrics, rangeMetrics, stockSnapshot, aiSummary, salesSummary, dashboardExtras };
+module.exports = { dailyMetrics, rangeMetrics, stockSnapshot, aiSummary, salesSummary, dashboardExtras, outstandingReport, OVERDUE_DAYS };

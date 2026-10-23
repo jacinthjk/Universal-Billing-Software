@@ -28,6 +28,10 @@ const PERMISSIONS = {
   'website.manage': 'Manage website & sharing',
   'ai.manage': 'Manage AI assistant & knowledge base',
   'whatsapp.manage': 'Link WhatsApp & send product updates / reminders',
+  'staff.view': 'View employees, attendance & leave',
+  'staff.manage': 'Manage employees, mark attendance & approve leave',
+  'bank.view': 'View bank accounts & transactions',
+  'bank.manage': 'Add bank accounts & import statements',
   'users.manage': 'Manage users & roles',
   'settings.manage': 'Manage business settings & theme',
 };

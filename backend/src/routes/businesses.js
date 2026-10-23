@@ -7,7 +7,7 @@ const { prisma } = require('../lib/prisma');
 const { ah, badRequest, conflict, forbidden } = require('../lib/errors');
 const { validate } = require('../middleware/validate');
 const { requireBusiness, requirePerm } = require('../middleware/tenant');
-const { THEMES, FONTS, BUSINESS_TYPES, MODULES } = require('../lib/presets');
+const { THEMES, FONTS, BUSINESS_TYPES, MODULES, LATER_MODULES } = require('../lib/presets');
 const { PERMISSIONS, SYSTEM_ROLES } = require('../lib/permissions');
 const { withDefaults, deepMerge } = require('../lib/businessConfig');
 const { slugify } = require('../lib/util');
@@ -145,7 +145,10 @@ router.put('/current', requireBusiness, requirePerm('settings.manage', 'website.
   if (body.theme) data.theme = deepMerge(raw.theme || {}, body.theme);
   if (body.terminology) data.terminology = deepMerge(raw.terminology || {}, body.terminology);
   if (body.settings) {
-    if (body.settings.modules) body.settings.modules = body.settings.modules.filter((m) => MODULES.includes(m));
+    if (body.settings.modules) {
+      body.settings.modules = body.settings.modules.filter((m) => MODULES.includes(m));
+      body.settings.modulesOff = LATER_MODULES.filter((m) => !body.settings.modules.includes(m));
+    }
     data.settings = deepMerge(raw.settings || {}, body.settings);
   }
   if (body.website) {

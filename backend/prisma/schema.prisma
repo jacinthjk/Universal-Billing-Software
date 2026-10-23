@@ -26,29 +26,29 @@ model User {
 }
 
 model Business {
-  id          String         @id @default(cuid())
-  name        String
-  slug        String         @unique
-  type        String         @default("RETAIL")
-  status      BusinessStatus @default(ACTIVE)
-  plan        String         @default("trial")
-  phone       String?
-  email       String?
-  address     String?
-  city        String?
-  taxId       String?
-  currency    String         @default("INR")
-  timezone    String         @default("Asia/Kolkata")
-  logoUrl     String?
+  id               String         @id @default(cuid())
+  name             String
+  slug             String         @unique
+  type             String         @default("RETAIL")
+  status           BusinessStatus @default(ACTIVE)
+  plan             String         @default("trial")
+  phone            String?
+  email            String?
+  address          String?
+  city             String?
+  taxId            String?
+  currency         String         @default("INR")
+  timezone         String         @default("Asia/Kolkata")
+  logoUrl          String?
   // bcrypt hash of the optional passcode required to edit or cancel saved bills
   billPasscodeHash String?
-  theme       Json           @default("{}")
-  terminology Json           @default("{}")
-  settings    Json           @default("{}")
-  website     Json           @default("{}")
-  ai          Json           @default("{}")
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  theme            Json           @default("{}")
+  terminology      Json           @default("{}")
+  settings         Json           @default("{}")
+  website          Json           @default("{}")
+  ai               Json           @default("{}")
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   locations     Location[]
   roles         Role[]
@@ -70,6 +70,11 @@ model Business {
   notifications Notification[]
   whatsappAuth  WhatsAppAuth[]
   messages      MessageLog[]
+  employees     Employee[]
+  attendance    Attendance[]
+  leaves        LeaveRequest[]
+  bankAccounts  BankAccount[]
+  bankTxns      BankTransaction[]
 }
 
 enum BusinessStatus {
@@ -133,36 +138,36 @@ model Category {
 }
 
 model Product {
-  id            String        @id @default(cuid())
-  businessId    String
-  sku           String
-  barcode       String?
-  hsn           String?
-  name          String
-  kind          ItemKind      @default(PRODUCT)
-  categoryId    String?
-  brand         String?
-  variant       String?
-  unit          String        @default("pcs")
-  costPrice     Decimal       @default(0) @db.Decimal(12, 2)
-  sellingPrice  Decimal       @default(0) @db.Decimal(12, 2)
-  mrp           Decimal?      @db.Decimal(12, 2)
-  taxRate       Decimal       @default(0) @db.Decimal(5, 2)
-  trackStock    Boolean       @default(true)
-  stockQty      Decimal       @default(0) @db.Decimal(12, 3)
-  reorderLevel  Decimal?      @db.Decimal(12, 3)
-  batchTracking Boolean       @default(false)
-  serialTracking Boolean      @default(false)
-  imageUrl      String?
-  description   String?
-  customFields  Json          @default("{}")
-  showOnWebsite Boolean       @default(true)
-  active        Boolean       @default(true)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  business      Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  category      Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  batches       ProductBatch[]
+  id             String         @id @default(cuid())
+  businessId     String
+  sku            String
+  barcode        String?
+  hsn            String?
+  name           String
+  kind           ItemKind       @default(PRODUCT)
+  categoryId     String?
+  brand          String?
+  variant        String?
+  unit           String         @default("pcs")
+  costPrice      Decimal        @default(0) @db.Decimal(12, 2)
+  sellingPrice   Decimal        @default(0) @db.Decimal(12, 2)
+  mrp            Decimal?       @db.Decimal(12, 2)
+  taxRate        Decimal        @default(0) @db.Decimal(5, 2)
+  trackStock     Boolean        @default(true)
+  stockQty       Decimal        @default(0) @db.Decimal(12, 3)
+  reorderLevel   Decimal?       @db.Decimal(12, 3)
+  batchTracking  Boolean        @default(false)
+  serialTracking Boolean        @default(false)
+  imageUrl       String?
+  description    String?
+  customFields   Json           @default("{}")
+  showOnWebsite  Boolean        @default(true)
+  active         Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  business       Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category       Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  batches        ProductBatch[]
 
   @@unique([businessId, sku])
   @@index([businessId, name])
@@ -266,23 +271,23 @@ model CustomerVisit {
 // ───────────────────────────── Purchasing ─────────────────────────────
 
 model Purchase {
-  id          String         @id @default(cuid())
+  id          String            @id @default(cuid())
   businessId  String
   number      String
   supplierId  String?
   supplierRef String?
-  status      PurchaseStatus @default(RECEIVED)
-  date        DateTime       @default(now())
-  subtotal    Decimal        @default(0) @db.Decimal(14, 2)
-  discount    Decimal        @default(0) @db.Decimal(14, 2)
-  tax         Decimal        @default(0) @db.Decimal(14, 2)
-  total       Decimal        @default(0) @db.Decimal(14, 2)
-  paidAmount  Decimal        @default(0) @db.Decimal(14, 2)
+  status      PurchaseStatus    @default(RECEIVED)
+  date        DateTime          @default(now())
+  subtotal    Decimal           @default(0) @db.Decimal(14, 2)
+  discount    Decimal           @default(0) @db.Decimal(14, 2)
+  tax         Decimal           @default(0) @db.Decimal(14, 2)
+  total       Decimal           @default(0) @db.Decimal(14, 2)
+  paidAmount  Decimal           @default(0) @db.Decimal(14, 2)
   notes       String?
   createdById String?
-  createdAt   DateTime       @default(now())
-  business    Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  supplier    Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  createdAt   DateTime          @default(now())
+  business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  supplier    Supplier?         @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   items       PurchaseItem[]
   payments    SupplierPayment[]
 
@@ -331,19 +336,19 @@ model SupplierPayment {
 // ───────────────────────────── Sales ─────────────────────────────
 
 model Sale {
-  id             String        @id @default(cuid())
+  id             String         @id @default(cuid())
   businessId     String
   number         String
   customerId     String?
-  orderId        String?       @unique
-  channel        String        @default("POS")
-  status         SaleStatus    @default(COMPLETED)
-  subtotal       Decimal       @default(0) @db.Decimal(14, 2)
-  discount       Decimal       @default(0) @db.Decimal(14, 2)
-  tax            Decimal       @default(0) @db.Decimal(14, 2)
-  total          Decimal       @default(0) @db.Decimal(14, 2)
-  paidAmount     Decimal       @default(0) @db.Decimal(14, 2)
-  paymentStatus  PaymentStatus @default(PAID)
+  orderId        String?        @unique
+  channel        String         @default("POS")
+  status         SaleStatus     @default(COMPLETED)
+  subtotal       Decimal        @default(0) @db.Decimal(14, 2)
+  discount       Decimal        @default(0) @db.Decimal(14, 2)
+  tax            Decimal        @default(0) @db.Decimal(14, 2)
+  total          Decimal        @default(0) @db.Decimal(14, 2)
+  paidAmount     Decimal        @default(0) @db.Decimal(14, 2)
+  paymentStatus  PaymentStatus  @default(PAID)
   customerStatus String?
   // Billing details as printed on the invoice (editable at the POS preview step)
   billName       String?
@@ -353,17 +358,17 @@ model Sale {
   billTaxId      String?
   visitNumber    Int?
   notes          String?
-  verifyToken    String        @unique @default(cuid())
-  editCount      Int           @default(0)
+  verifyToken    String         @unique @default(cuid())
+  editCount      Int            @default(0)
   editedAt       DateTime?
   cancelledAt    DateTime?
   cancelledById  String?
   cancelReason   String?
   createdById    String?
-  createdAt      DateTime      @default(now())
-  business       Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  customer       Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  order          Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  createdAt      DateTime       @default(now())
+  business       Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer       Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  order          Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
   items          SaleItem[]
   payments       Payment[]
   returns        SaleReturn[]
@@ -468,37 +473,37 @@ model InvoiceAsset {
 // ───────────────────────────── Orders / CRM ─────────────────────────────
 
 model Order {
-  id            String        @id @default(cuid())
-  businessId    String
-  number        String
-  kind          OrderKind     @default(ORDER)
-  channel       String        @default("WEBSITE")
-  status        OrderStatus   @default(PENDING)
-  customerId    String?
-  enquiryId     String?
-  contactName   String?
-  contactPhone  String?
-  contactEmail  String?
-  fulfilment    String        @default("PICKUP")
-  address       String?
-  paymentMethod String        @default("PAY_ON_DELIVERY")
-  paymentStatus PaymentStatus @default(UNPAID)
-  paymentRef    String?
-  subtotal      Decimal       @default(0) @db.Decimal(14, 2)
-  tax           Decimal       @default(0) @db.Decimal(14, 2)
-  total         Decimal       @default(0) @db.Decimal(14, 2)
-  notes         String?
-  trackingToken String        @unique @default(cuid())
-  createdByAi   Boolean       @default(false)
+  id             String             @id @default(cuid())
+  businessId     String
+  number         String
+  kind           OrderKind          @default(ORDER)
+  channel        String             @default("WEBSITE")
+  status         OrderStatus        @default(PENDING)
+  customerId     String?
+  enquiryId      String?
+  contactName    String?
+  contactPhone   String?
+  contactEmail   String?
+  fulfilment     String             @default("PICKUP")
+  address        String?
+  paymentMethod  String             @default("PAY_ON_DELIVERY")
+  paymentStatus  PaymentStatus      @default(UNPAID)
+  paymentRef     String?
+  subtotal       Decimal            @default(0) @db.Decimal(14, 2)
+  tax            Decimal            @default(0) @db.Decimal(14, 2)
+  total          Decimal            @default(0) @db.Decimal(14, 2)
+  notes          String?
+  trackingToken  String             @unique @default(cuid())
+  createdByAi    Boolean            @default(false)
   idempotencyKey String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  business      Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  customer      Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  enquiry       Enquiry?      @relation(fields: [enquiryId], references: [id], onDelete: SetNull)
-  items         OrderItem[]
-  reservations  StockReservation[]
-  sale          Sale?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  business       Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer       Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  enquiry        Enquiry?           @relation(fields: [enquiryId], references: [id], onDelete: SetNull)
+  items          OrderItem[]
+  reservations   StockReservation[]
+  sale           Sale?
 
   @@unique([businessId, number])
   @@unique([businessId, idempotencyKey])
@@ -692,15 +697,15 @@ model Notification {
 }
 
 model AuditLog {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   businessId String?
   userId     String?
-  actor      String   @default("USER")
+  actor      String    @default("USER")
   action     String
   entity     String
   entityId   String?
   data       Json?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
   business   Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId, createdAt])
@@ -757,4 +762,126 @@ model MessageLog {
 
   @@index([businessId, createdAt])
   @@index([businessId, batchId])
+}
+
+// ─────────────── Employees: attendance & leave ───────────────
+
+// A person who works for the business. userId links them to a login so they can punch in themselves.
+model Employee {
+  id          String         @id @default(cuid())
+  businessId  String
+  code        String
+  name        String
+  phone       String?
+  email       String?
+  designation String?
+  department  String?
+  joinDate    DateTime?
+  salary      Decimal?       @db.Decimal(12, 2)
+  shiftStart  String         @default("09:00")
+  shiftEnd    String         @default("18:00")
+  leaveQuota  Int            @default(12)
+  weekOff     String         @default("SUN")
+  userId      String?
+  active      Boolean        @default(true)
+  notes       String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  business    Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  attendance  Attendance[]
+  leaves      LeaveRequest[]
+
+  @@unique([businessId, code])
+  @@index([businessId])
+}
+
+// One row per employee per day (date is YYYY-MM-DD in the business timezone).
+// status: PRESENT | HALF_DAY | ABSENT | LEAVE | HOLIDAY | WEEK_OFF
+model Attendance {
+  id          String    @id @default(cuid())
+  businessId  String
+  employeeId  String
+  date        String
+  status      String    @default("PRESENT")
+  punchIn     DateTime?
+  punchOut    DateTime?
+  minutes     Int       @default(0)
+  lateMinutes Int       @default(0)
+  source      String    @default("MANUAL")
+  note        String?
+  updatedById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@index([businessId, date])
+}
+
+// type: CASUAL | SICK | PAID | UNPAID   status: PENDING | APPROVED | REJECTED
+model LeaveRequest {
+  id          String    @id @default(cuid())
+  businessId  String
+  employeeId  String
+  type        String    @default("CASUAL")
+  fromDate    String
+  toDate      String
+  days        Decimal   @db.Decimal(5, 1)
+  reason      String?
+  status      String    @default("PENDING")
+  decidedById String?
+  decidedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, status])
+  @@index([employeeId])
+}
+
+// ─────────────── Banking ───────────────
+
+// provider: MANUAL (statement import / entries). A live feed (Account Aggregator) would add its own value.
+model BankAccount {
+  id             String            @id @default(cuid())
+  businessId     String
+  name           String
+  bankName       String?
+  accountMask    String?
+  ifsc           String?
+  openingBalance Decimal           @default(0) @db.Decimal(14, 2)
+  openingDate    DateTime?
+  provider       String            @default("MANUAL")
+  active         Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  business       Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  transactions   BankTransaction[]
+
+  @@index([businessId])
+}
+
+// hash de-duplicates re-imported statement lines; importId groups one upload so it can be undone.
+model BankTransaction {
+  id          String      @id @default(cuid())
+  businessId  String
+  accountId   String
+  date        DateTime
+  description String
+  reference   String?
+  debit       Decimal     @default(0) @db.Decimal(14, 2)
+  credit      Decimal     @default(0) @db.Decimal(14, 2)
+  balance     Decimal?    @db.Decimal(14, 2)
+  mode        String?
+  category    String?
+  source      String      @default("IMPORT")
+  importId    String?
+  hash        String
+  createdAt   DateTime    @default(now())
+  business    Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  account     BankAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, hash])
+  @@index([businessId, date])
+  @@index([accountId, date])
 }

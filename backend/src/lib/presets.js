@@ -34,7 +34,9 @@ const BUSINESS_TYPES = {
   CUSTOM: { label: 'Custom', theme: 'classic', terms: {}, fields: [], modules: [] },
 };
 
-const MODULES = ['pos', 'products', 'inventory', 'purchases', 'customers', 'enquiries', 'orders', 'website', 'reports', 'ai'];
+const MODULES = ['pos', 'products', 'inventory', 'purchases', 'customers', 'enquiries', 'orders', 'website', 'reports', 'ai', 'staff', 'bank'];
+// Modules added after businesses may already have saved a module list: on unless switched off (settings.modulesOff).
+const LATER_MODULES = ['staff', 'bank'];
 
 const DEFAULT_SETTINGS = {
   modules: MODULES,
@@ -108,4 +110,4 @@ function terminologyFor(type, overrides = {}) {
   return { ...BASE_TERMS, ...(BUSINESS_TYPES[type]?.terms || {}), ...overrides };
 }
 
-module.exports = { THEMES, FONTS, BUSINESS_TYPES, MODULES, DEFAULT_SETTINGS, DEFAULT_WEBSITE, DEFAULT_AI, terminologyFor };
+module.exports = { THEMES, FONTS, BUSINESS_TYPES, MODULES, LATER_MODULES, DEFAULT_SETTINGS, DEFAULT_WEBSITE, DEFAULT_AI, terminologyFor };

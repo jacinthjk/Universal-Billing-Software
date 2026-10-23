@@ -89,3 +89,26 @@ export function Donut({ data, currency, height = 200 }) {
     </div>
   )
 }
+
+// Money in vs money out per month: two series, so a legend sits above; hover shows both values.
+export function InOutChart({ data, currency, height = 220 }) {
+  const label = (m) => new Date(`${m}-01T00:00:00`).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' })
+  return (
+    <div>
+      <div className="mb-2 flex gap-4 text-sm text-slate-700">
+        <span className="inline-flex items-center gap-1.5"><span className="size-2.5 rounded-sm" style={{ background: SERIES[0] }} />Money in</span>
+        <span className="inline-flex items-center gap-1.5"><span className="size-2.5 rounded-sm" style={{ background: SERIES[1] }} />Money out</span>
+      </div>
+      <ResponsiveContainer width="100%" height={height}>
+        <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }} barGap={2} barCategoryGap="22%">
+          <CartesianGrid stroke="#eef2f6" vertical={false} />
+          <XAxis dataKey="month" tickFormatter={label} tick={AXIS} axisLine={false} tickLine={false} />
+          <YAxis tickFormatter={(v) => compactMoney(v, currency)} tick={AXIS} axisLine={false} tickLine={false} width={56} />
+          <Tooltip content={<TipBox currency={currency} labelFmt={label} />} cursor={{ fill: '#f1f5f9' }} />
+          <Bar dataKey="credits" name="Money in" fill={SERIES[0]} radius={[4, 4, 0, 0]} maxBarSize={28} />
+          <Bar dataKey="debits" name="Money out" fill={SERIES[1]} radius={[4, 4, 0, 0]} maxBarSize={28} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}

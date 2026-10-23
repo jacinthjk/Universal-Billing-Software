@@ -6,9 +6,9 @@ const { validate } = require('../middleware/validate');
 const { requirePerm } = require('../middleware/tenant');
 const { todayIn, addDays, dayRange, n } = require('../lib/util');
 const storage = require('../lib/storage');
-const { rangeMetrics, dailyMetrics, aiSummary, dashboardExtras } = require('../services/reports');
+const { rangeMetrics, dailyMetrics, aiSummary, dashboardExtras, outstandingReport } = require('../services/reports');
 const { generateDailyReport, reportPath } = require('../services/dailyReport');
-const { overviewExport, buildWorkbook } = require('../services/reportExports');
+const { overviewExport, buildWorkbook, outstandingWorkbook } = require('../services/reportExports');
 const { deliverDailyReport, maskNumber } = require('../services/reportDelivery');
 const messaging = require('../services/messaging');
 
@@ -80,12 +80,28 @@ router.get('/export/sales.csv', requirePerm('reports.export'), ah(async (req, re
     include: { customer: { select: { name: true, phone: true } }, payments: true }, orderBy: { createdAt: 'asc' },
   });
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const header = ['Invoice', 'Date', 'Customer', 'Phone', 'Channel', 'Status', 'Subtotal', 'Discount', 'Tax', 'Total', 'Paid', 'Payment status', 'Methods', 'Customer status', 'Visit #'];
-  const rows = sales.map((s) => [s.number, s.createdAt.toISOString(), s.customer?.name, s.customer?.phone, s.channel, s.status, n(s.subtotal), n(s.discount), n(s.tax), n(s.total), n(s.paidAmount), s.paymentStatus, s.payments.map((p) => p.method).join('|'), s.customerStatus, s.visitNumber].map(esc).join(','));
+  const header = ['Invoice', 'Date', 'Customer', 'Phone', 'Channel', 'Status', 'Subtotal', 'Discount', 'Tax', 'Total', 'Paid', 'Payment status', 'Methods', 'Customer status', 'Visit #', 'Balance due', 'Outstanding days'];
+  const today = todayIn(tz);
+  // Unpaid / part-paid bills: how many days the balance has been outstanding.
+  const ageDays = (s) => Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${todayIn(tz, s.createdAt)}T00:00:00Z`)) / 86400000);
+  const rows = sales.map((s) => [s.number, s.createdAt.toISOString(), s.customer?.name, s.customer?.phone, s.channel, s.status, n(s.subtotal), n(s.discount), n(s.tax), n(s.total), n(s.paidAmount), s.paymentStatus, s.payments.map((p) => p.method).join('|'), s.customerStatus, s.visitNumber, ...(s.status !== 'CANCELLED' && s.paymentStatus !== 'PAID' ? [Math.round((n(s.total) - n(s.paidAmount)) * 100) / 100, ageDays(s)] : ['', ''])].map(esc).join(','));
   await audit({ businessId: req.businessId, userId: req.user.id, action: 'report.export', entity: 'Sale', data: { from, to } });
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', `attachment; filename="sales-${from}-to-${to}.csv"`);
   res.send([header.join(','), ...rows].join('\n'));
+}));
+
+// Unpaid bills with outstanding days (bills over 30 days are flagged "overdue").
+router.get('/outstanding', requirePerm('reports.view', 'sales.view'), ah(async (req, res) => {
+  res.json(await outstandingReport(req.business));
+}));
+
+router.get('/outstanding.xlsx', requirePerm('reports.view', 'sales.view'), ah(async (req, res) => {
+  const out = await outstandingReport(req.business);
+  await audit({ businessId: req.businessId, userId: req.user.id, action: 'report.export', entity: 'Report', data: { report: 'outstanding' } });
+  res.setHeader('Content-Type', MIME.xlsx);
+  res.setHeader('Content-Disposition', `attachment; filename="outstanding-${out.asOf}.xlsx"`);
+  res.send(await outstandingWorkbook(req.business, out));
 }));
 
 // ───── Daily visual reports ─────

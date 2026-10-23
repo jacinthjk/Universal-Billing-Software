@@ -59,6 +59,8 @@ app.use('/api/orders', scoped, requireModule('orders'), require('./routes/orders
 app.use('/api/reports', scoped, require('./routes/reports'));
 app.use('/api/ai', scoped, requireModule('ai'), require('./routes/ai'));
 app.use('/api/whatsapp', scoped, require('./routes/whatsapp'));
+app.use('/api/staff', scoped, requireModule('staff'), require('./routes/staff'));
+app.use('/api/bank', scoped, requireModule('bank'), require('./routes/bank'));
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 

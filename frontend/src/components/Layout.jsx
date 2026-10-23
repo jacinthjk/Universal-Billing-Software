@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
-  Home, Boxes, Truck, MessageSquare, ShoppingBag, BarChart3, PlusCircle, Type,
-  Globe, Bot, Settings, ChevronsUpDown, Check, Plus, LogOut, Bell, Menu, X, Shield, Store, MessageCircle,
+  Home, Boxes, BarChart3, PlusCircle, Type, Globe, Settings, ChevronsUpDown, ChevronDown, Check, Plus, LogOut, Bell, Menu, X, Shield, Store,
+  IdCard, Landmark,
 } from 'lucide-react'
 import { TEXT_SIZES, applyTextSize, getTextSize } from '../lib/textSize'
 import { useAuth } from '../context/AuthContext'
@@ -11,65 +11,157 @@ import { useBusinessIcons } from '../lib/businessIcons'
 import api from '../lib/api'
 import { ago } from '../lib/format'
 
-// Sidebar grouped by everyday purpose, with plain-language names and a one-line hint per item.
+// Sidebar: main menus that open to show their sub-menus. Sub-menus that point at a page tab
+// (e.g. /reports?tab=daily) carry `tab`; `first` marks the tab a page opens on by default.
 function useNav() {
-  const { can, hasModule, t } = useAuth()
+  const { can, hasModule, t, user } = useAuth()
   const bi = useBusinessIcons() // business-specific icons for the key sections
-  const groups = [
+  const inv = t('invoice')
+  const menus = [
+    { key: 'home', label: 'Home', hint: "Today's summary", icon: Home, to: '/', show: can('dashboard.view') },
     {
-      title: 'Daily work',
+      key: 'sales', label: 'Sales & billing', hint: `Billing, ${inv.toLowerCase()}s, orders`, icon: bi.sale,
       items: [
-        { to: '/', label: 'Home', hint: "Today's summary", icon: Home, show: can('dashboard.view'), end: true },
-        { to: '/pos', label: `New ${t('invoice').toLowerCase()}`, hint: 'Billing counter (POS)', icon: bi.pos, show: hasModule('pos') && can('pos.sell') },
-        { to: '/sales', label: `${t('invoice')}s`, hint: 'Find, print or share', icon: bi.sale, show: can('sales.view') },
-        { to: '/orders', label: 'Online orders', hint: 'From your website', icon: ShoppingBag, show: hasModule('orders') && can('orders.view') },
+        { to: '/pos', label: `New ${inv.toLowerCase()}`, show: hasModule('pos') && can('pos.sell') },
+        { to: '/sales', label: `${inv}s`, show: can('sales.view') },
+        { to: '/orders', label: 'Online orders', show: hasModule('orders') && can('orders.view') },
+        { to: '/reports', tab: 'outstanding', label: 'Payments due', show: can('reports.view', 'sales.view') },
       ],
     },
     {
-      title: 'People',
+      key: 'people', label: t('customers'), hint: 'Profiles, enquiries, WhatsApp', icon: bi.customers,
       items: [
-        { to: '/customers', label: t('customers'), hint: 'Profiles & history', icon: bi.customers, show: hasModule('customers') && can('customers.view') },
-        { to: '/enquiries', label: 'Enquiries', hint: 'Leads & follow-ups', icon: MessageSquare, show: hasModule('enquiries') && can('enquiries.view') },
-        { to: '/whatsapp', label: 'WhatsApp', hint: 'Reminders & product updates', icon: MessageCircle, show: can('whatsapp.manage', 'sales.view') },
+        { to: '/customers', label: `All ${t('customers').toLowerCase()}`, show: hasModule('customers') && can('customers.view') },
+        { to: '/enquiries', label: 'Enquiries & follow-ups', show: hasModule('enquiries') && can('enquiries.view') },
+        { to: '/whatsapp', label: 'WhatsApp', show: can('whatsapp.manage', 'sales.view') },
       ],
     },
     {
-      title: 'Stock',
+      key: 'stock', label: 'Stock & purchases', hint: `${t('products')}, stock, suppliers`, icon: Boxes,
       items: [
-        { to: '/products', label: t('products'), hint: 'Prices & catalogue', icon: bi.products, show: hasModule('products') && can('products.view') },
-        { to: '/inventory', label: 'Stock', hint: 'Levels & movements', icon: Boxes, show: hasModule('inventory') && can('inventory.view') },
-        { to: '/purchases', label: 'Purchases', hint: 'Suppliers & bills', icon: Truck, show: hasModule('purchases') && can('purchases.view', 'suppliers.manage') },
+        { to: '/products', label: t('products'), show: hasModule('products') && can('products.view') },
+        { to: '/inventory', label: 'Stock levels', show: hasModule('inventory') && can('inventory.view') },
+        { to: '/purchases', label: 'Purchases & suppliers', show: hasModule('purchases') && can('purchases.view', 'suppliers.manage') },
       ],
     },
     {
-      title: 'Business',
+      key: 'staff', label: 'Employees', hint: 'Attendance, leave, hours', icon: IdCard,
       items: [
-        { to: '/reports', label: 'Reports', hint: 'Sales & daily report', icon: BarChart3, show: hasModule('reports') && can('reports.view') },
-        { to: '/website', label: 'My website', hint: 'Share & QR code', icon: Globe, show: hasModule('website') && can('website.manage') },
-        { to: '/ai', label: 'AI assistant', hint: 'Chats with customers', icon: Bot, show: hasModule('ai') && can('ai.manage', 'enquiries.view') },
-        { to: '/settings', label: 'Settings', hint: 'Business, theme, team', icon: Settings, show: can('settings.manage', 'users.manage') },
+        { to: '/staff', tab: 'today', first: true, label: 'Attendance today', show: hasModule('staff') && can('staff.view', 'staff.manage') },
+        { to: '/staff', tab: 'employees', label: 'Employee details', show: hasModule('staff') && can('staff.view', 'staff.manage') },
+        { to: '/staff', tab: 'leave', label: 'Leave requests', show: hasModule('staff') && can('staff.view', 'staff.manage') },
+        { to: '/staff', tab: 'monthly', label: 'Monthly attendance', show: hasModule('staff') && can('staff.view', 'staff.manage') },
       ],
     },
+    {
+      key: 'bank', label: 'Banking', hint: 'Credits, debits, statements', icon: Landmark,
+      items: [
+        { to: '/bank', tab: 'transactions', first: true, label: 'Credits & debits', show: hasModule('bank') && can('bank.view', 'bank.manage') },
+        { to: '/bank', tab: 'accounts', label: 'Bank accounts & import', show: hasModule('bank') && can('bank.view', 'bank.manage') },
+      ],
+    },
+    {
+      key: 'reports', label: 'Reports', hint: 'Sales, outstanding, daily', icon: BarChart3,
+      items: [
+        { to: '/reports', tab: 'overview', first: true, label: 'Business overview', show: hasModule('reports') && can('reports.view') },
+        { to: '/reports', tab: 'outstanding', label: 'Outstanding bills', show: can('reports.view', 'sales.view') },
+        { to: '/reports', tab: 'daily', label: 'Daily visual report', show: hasModule('reports') && can('reports.view') },
+        { to: '/reports', tab: 'ai', label: 'AI & leads', show: hasModule('reports') && hasModule('ai') && can('reports.view') },
+      ],
+    },
+    {
+      key: 'online', label: 'Online store', hint: 'Website, AI assistant', icon: Globe,
+      items: [
+        { to: '/website', label: 'My website', show: hasModule('website') && can('website.manage') },
+        { to: '/ai', label: 'AI assistant', show: hasModule('ai') && can('ai.manage', 'enquiries.view') },
+      ],
+    },
+    {
+      key: 'settings', label: 'Settings', hint: 'Business, theme, team', icon: Settings,
+      items: [
+        { to: '/settings', tab: 'profile', first: true, label: 'Business profile', show: can('settings.manage') },
+        { to: '/settings', tab: 'branding', label: 'Theme & branding', show: can('settings.manage') },
+        { to: '/settings', tab: 'billing', label: 'Billing & modules', show: can('settings.manage') },
+        { to: '/settings', tab: 'team', label: 'Team & roles', show: can('users.manage') },
+        { to: '/settings', tab: 'audit', label: 'Audit & export', show: can('users.manage') },
+      ],
+    },
+    { key: 'admin', label: 'Platform admin', hint: 'All businesses', icon: Shield, to: '/admin', show: !!user.isPlatformAdmin },
   ]
-  return groups.map((g) => ({ ...g, items: g.items.filter((i) => i.show) })).filter((g) => g.items.length)
+  return menus
+    .map((m) => (m.items ? { ...m, items: m.items.filter((i) => i.show) } : m))
+    .filter((m) => (m.items ? m.items.length : m.show))
 }
 
-function NavItem({ to, label, hint, icon: Icon, end, onNavigate }) {
+const hrefOf = (i) => (i.tab ? `${i.to}?tab=${i.tab}` : i.to)
+
+// A sub-menu is active on its page; for tabbed pages also on its tab (or the default tab when none is set).
+function isActive(item, location) {
+  const onPage = item.to === '/' ? location.pathname === '/' : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`)
+  if (!onPage || !item.tab) return onPage
+  const tab = new URLSearchParams(location.search).get('tab')
+  return tab ? tab === item.tab : !!item.first
+}
+
+const MenuIcon = ({ icon: Icon, active }) => (
+  <span className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${active ? 'bg-brand text-brand-fg' : 'bg-white/10 text-white group-hover:bg-white/15'}`}><Icon className="size-5" /></span>
+)
+
+function MainMenu({ menu, open, onToggle, location }) {
+  const navigate = useNavigate()
+  const activeHere = menu.items ? menu.items.some((i) => isActive(i, location)) : isActive(menu, location)
+  const text = (
+    <span className="min-w-0 flex-1 text-left">
+      <span className="block truncate text-[0.9375rem] font-semibold leading-tight">{menu.label}</span>
+      <span className={`block truncate text-xs leading-tight ${activeHere && !menu.items ? 'text-slate-600' : 'text-white/60'}`}>{menu.hint}</span>
+    </span>
+  )
+  if (!menu.items) {
+    return (
+      <button onClick={() => navigate(menu.to)} aria-current={activeHere ? 'page' : undefined}
+        className={`group flex w-full items-center gap-3 rounded-xl px-2 py-1.5 transition ${activeHere ? 'bg-white text-slate-900 shadow-sm' : 'text-white/85 hover:bg-white/10 hover:text-white'}`}>
+        <MenuIcon icon={menu.icon} active={activeHere} />{text}
+      </button>
+    )
+  }
+  const id = `menu-${menu.key}`
   return (
-    <NavLink to={to} end={end} onClick={onNavigate}
-      className={({ isActive }) => `group flex items-center gap-3 rounded-xl px-2 py-1.5 transition ${isActive ? 'bg-white text-slate-900 shadow-sm' : 'text-white/85 hover:bg-white/10 hover:text-white'}`}>
-      {({ isActive }) => (
-        <>
-          <span className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${isActive ? 'bg-brand text-brand-fg' : 'bg-white/10 text-white group-hover:bg-white/15'}`}><Icon className="size-5" /></span>
-          <span className="min-w-0">
-            <span className="block truncate text-[0.9375rem] font-semibold leading-tight">{label}</span>
-            <span className={`block truncate text-xs leading-tight ${isActive ? 'text-slate-600' : 'text-white/60'}`}>{hint}</span>
-          </span>
-        </>
+    <div className={`rounded-xl transition ${open ? 'bg-white/[0.06]' : ''}`}>
+      <button onClick={onToggle} aria-expanded={open} aria-controls={id}
+        className={`group flex w-full items-center gap-3 rounded-xl px-2 py-1.5 transition hover:bg-white/10 ${activeHere ? 'text-white' : 'text-white/85 hover:text-white'}`}>
+        <MenuIcon icon={menu.icon} active={activeHere} />{text}
+        <ChevronDown className={`size-4 shrink-0 text-white/60 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <ul id={id} className="mb-1 ml-[1.625rem] space-y-0.5 border-l border-white/15 py-1 pl-3">
+          {menu.items.map((i) => {
+            const on = isActive(i, location)
+            return (
+              <li key={hrefOf(i) + i.label}>
+                <button onClick={() => navigate(hrefOf(i))} aria-current={on ? 'page' : undefined}
+                  className={`flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-[0.875rem] transition ${on ? 'bg-white font-semibold text-slate-900 shadow-sm' : 'text-white/80 hover:bg-white/10 hover:text-white'}`}>
+                  <span className="truncate">{i.label}</span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
       )}
-    </NavLink>
+    </div>
   )
 }
+
+// Only one main menu is open at a time; the one holding the current page opens by itself.
+function SideMenu({ menus }) {
+  const location = useLocation()
+  const current = menus.find((m) => m.items?.some((i) => isActive(i, location)))?.key
+  const [open, setOpen] = useState(current)
+  const [lastPage, setLastPage] = useState(location.pathname + location.search)
+  const page = location.pathname + location.search
+  if (page !== lastPage) { setLastPage(page); if (current) setOpen(current) }
+  return menus.map((m) => <MainMenu key={m.key} menu={m} location={location} open={open === m.key} onToggle={() => setOpen(open === m.key ? null : m.key)} />)
+}
+
 
 // Text size is shared by every switch on screen (header, mobile menu) so they never disagree.
 function useTextSize() {
@@ -222,12 +314,12 @@ function Notifications() {
 
 export default function Layout() {
   const { business, user, role, logout, websiteUrl, can, hasModule, t } = useAuth()
-  const groups = useNav()
+  const menus = useNav()
   const bi = useBusinessIcons()
   const [mobile, setMobile] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
-  useEffect(() => { setMobile(false) }, [location.pathname])
+  useEffect(() => { setMobile(false) }, [location.pathname, location.search])
   const canSell = hasModule('pos') && can('pos.sell')
 
   const sidebar = (
@@ -240,14 +332,8 @@ export default function Layout() {
           <PlusCircle className="size-5" /> New {t('invoice').toLowerCase()}
         </button>
       )}
-      <nav className="mt-3 flex-1 space-y-4 overflow-y-auto pr-1" aria-label="Main">
-        {groups.map((g) => (
-          <div key={g.title}>
-            <div className="mb-1 px-2 text-xs font-bold uppercase tracking-wider text-white/50">{g.title}</div>
-            <div className="space-y-0.5">{g.items.map((i) => <NavItem key={i.to} {...i} />)}</div>
-          </div>
-        ))}
-        {user.isPlatformAdmin && <NavItem to="/admin" label="Platform admin" hint="All businesses" icon={Shield} />}
+      <nav className="mt-3 flex-1 space-y-1 overflow-y-auto pr-1" aria-label="Main">
+        <SideMenu menus={menus} />
       </nav>
       <a href={websiteUrl} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-3 rounded-xl px-2 py-1.5 text-white/85 hover:bg-white/10">
         <span className="flex size-9 items-center justify-center rounded-lg bg-white/10"><Store className="size-5" /></span>

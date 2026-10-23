@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Download, RefreshCw, FileText, Image as ImageIcon, Sheet, Send, LayoutGrid, CalendarDays, Bot } from 'lucide-react'
+import { Download, RefreshCw, FileText, Image as ImageIcon, Sheet, Send, LayoutGrid, CalendarDays, Bot, HandCoins, AlertTriangle, Users, Clock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import api, { errMsg, fetchBlob, openFile } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
@@ -65,6 +65,84 @@ function Overview() {
           </Card>
         </div>
       </>}
+    </div>
+  )
+}
+
+// Unpaid bills with the number of days each has been outstanding; over 30 days is highlighted.
+function Outstanding() {
+  const { currency, t } = useAuth()
+  const { data, loading } = useFetch('/reports/outstanding')
+  const [view, setView] = useState('bills')
+  const [onlyOverdue, setOnlyOverdue] = useState(false)
+  const inv = t('invoice').toLowerCase()
+  if (loading || !data) return <Spinner />
+  const bills = onlyOverdue ? data.bills.filter((b) => b.overdue) : data.bills
+  const customers = onlyOverdue ? data.customers.filter((c) => c.oldestDays > data.overdueAfter) : data.customers
+  const maxBucket = Math.max(...data.buckets.map((b) => b.amount), 1)
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm text-slate-600">As of {date(data.asOf)}</span>
+        <div className="ml-auto"><ExportButton label="Excel" icon={Sheet} url="/reports/outstanding.xlsx" filename={`outstanding-${data.asOf}.xlsx`} /></div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Stat label="Total outstanding" value={money(data.totals.due, currency, { decimals: 0 })} sub={`${data.totals.count} unpaid ${inv}s`} icon={HandCoins} color="amber" />
+        <Stat label={`Over ${data.overdueAfter} days`} value={money(data.totals.overdueDue, currency, { decimals: 0 })} sub={`${data.totals.overdueCount} ${inv}s need follow-up`} icon={AlertTriangle} color="rose" />
+        <Stat label={`${t('customers')} owing`} value={data.customers.length} sub={data.customers[0] ? `Most: ${data.customers[0].name}` : '—'} icon={Users} color="violet" />
+        <Stat label="Oldest bill" value={data.bills[0] ? `${data.bills[0].days} days` : '—'} sub={data.bills[0] ? `${data.bills[0].number} · ${data.bills[0].name}` : 'Nothing pending'} icon={Clock} color="blue" />
+      </div>
+      <Card title="Age of unpaid amounts">
+        <ul className="space-y-2.5">
+          {data.buckets.map((b, i) => (
+            <li key={b.label} className="grid grid-cols-[6.5rem_1fr_auto] items-center gap-3 text-sm" title={`${b.label}: ${money(b.amount, currency)} on ${b.count} ${inv}s`}>
+              <span className={`font-semibold ${i ? 'text-red-800' : 'text-slate-700'}`}>{b.label}</span>
+              <span className="h-3 rounded-full bg-slate-100"><span className={`block h-3 rounded-full ${i ? 'bg-red-500' : 'bg-brand'}`} style={{ width: `${b.amount ? Math.max((b.amount / maxBucket) * 100, 2) : 0}%` }} /></span>
+              <span className="text-right"><b>{money(b.amount, currency, { decimals: 0 })}</b> <span className="text-slate-500">({b.count})</span></span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex gap-1">{[['bills', `By ${inv}`], ['customers', `By ${t('customer').toLowerCase()}`]].map(([k, l]) => <Button key={k} size="sm" variant={view === k ? 'primary' : 'secondary'} onClick={() => setView(k)}>{l}</Button>)}</div>
+        <label className="inline-flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" checked={onlyOverdue} onChange={(e) => setOnlyOverdue(e.target.checked)} /> Only over {data.overdueAfter} days</label>
+        <span className="inline-flex items-center gap-1.5 text-sm text-slate-600"><span className="size-3 rounded-sm bg-red-100 ring-1 ring-red-300" /> outstanding more than {data.overdueAfter} days</span>
+      </div>
+      <Card bodyClass="p-0 overflow-x-auto">
+        {view === 'bills' ? (!bills.length ? <Empty title="Nothing outstanding" /> : (
+          <table className="table-base">
+            <thead><tr><th>{t('invoice')}</th><th>Date</th><th>{t('customer')}</th><th className="text-right">Total</th><th className="text-right">Paid</th><th className="text-right">Balance due</th><th className="text-right">Outstanding days</th></tr></thead>
+            <tbody>{bills.map((b) => (
+              <tr key={b.saleId} className={b.overdue ? 'bg-red-50 hover:!bg-red-100' : ''}>
+                <td><Link to={`/sales/${b.saleId}`} className="font-medium text-brand">{b.number}</Link></td>
+                <td>{date(b.date)}</td>
+                <td>{b.customerId ? <Link to={`/customers/${b.customerId}`} className="hover:text-brand">{b.name}</Link> : b.name}<div className="text-xs text-slate-500">{b.phone}</div></td>
+                <td className="text-right">{money(b.total, currency)}</td>
+                <td className="text-right text-slate-600">{money(b.paid, currency)}</td>
+                <td className="text-right font-semibold">{money(b.due, currency)}</td>
+                <td className="text-right">{b.overdue
+                  ? <span className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2.5 py-0.5 text-sm font-bold text-white"><AlertTriangle className="size-3.5" />{b.days} days</span>
+                  : <span className="font-medium">{b.days} {b.days === 1 ? 'day' : 'days'}</span>}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        )) : (!customers.length ? <Empty title="Nothing outstanding" /> : (
+          <table className="table-base">
+            <thead><tr><th>{t('customer')}</th><th className="text-right">Unpaid {inv}s</th><th className="text-right">Balance due</th><th className="text-right">Oldest (days)</th></tr></thead>
+            <tbody>{customers.map((c) => {
+              const late = c.oldestDays > data.overdueAfter
+              return (
+                <tr key={`${c.customerId}-${c.name}-${c.phone}`} className={late ? 'bg-red-50 hover:!bg-red-100' : ''}>
+                  <td>{c.customerId ? <Link to={`/customers/${c.customerId}`} className="font-medium text-brand">{c.name}</Link> : c.name}<div className="text-xs text-slate-500">{c.phone}</div></td>
+                  <td className="text-right">{c.bills}</td>
+                  <td className="text-right font-semibold">{money(c.due, currency)}</td>
+                  <td className={`text-right ${late ? 'font-bold text-red-700' : ''}`}>{late && <AlertTriangle className="mr-1 inline size-3.5" />}{c.oldestDays}</td>
+                </tr>
+              )
+            })}</tbody>
+          </table>
+        ))}
+      </Card>
     </div>
   )
 }
@@ -259,15 +337,24 @@ function AIReport() {
 
 export default function Reports() {
   const [params, setParams] = useSearchParams()
-  const tab = params.get('tab') || 'overview'
-  const { hasModule } = useAuth()
+  const { hasModule, can } = useAuth()
+  // Staff who can see bills but not reports still get the outstanding list.
+  const full = can('reports.view')
+  const tab = params.get('tab') || (full ? 'overview' : 'outstanding')
+  const tabs = [
+    ...(full ? [{ value: 'overview', label: 'Overview', icon: LayoutGrid }] : []),
+    { value: 'outstanding', label: 'Outstanding', icon: HandCoins },
+    ...(full ? [{ value: 'daily', label: 'Daily visual report', icon: CalendarDays }] : []),
+    ...(full && hasModule('ai') ? [{ value: 'ai', label: 'AI & leads', icon: Bot }] : []),
+  ]
   return (
     <div>
-      <PageHeader kind="reports" title="Reports" subtitle="Sales, stock, customers, enquiries - and the automated daily visual report" />
-      <Tabs value={tab} onChange={(v) => setParams({ tab: v })} tabs={[{ value: 'overview', label: 'Overview', icon: LayoutGrid }, { value: 'daily', label: 'Daily visual report', icon: CalendarDays }, ...(hasModule('ai') ? [{ value: 'ai', label: 'AI & leads', icon: Bot }] : [])]} />
-      {tab === 'overview' && <Overview />}
-      {tab === 'daily' && <DailyReports />}
-      {tab === 'ai' && <AIReport />}
+      <PageHeader kind="reports" title="Reports" subtitle="Sales, outstanding bills, stock, customers - and the automated daily visual report" />
+      <Tabs value={tab} onChange={(v) => setParams({ tab: v })} tabs={tabs} />
+      {full && tab === 'overview' && <Overview />}
+      {tab === 'outstanding' && <Outstanding />}
+      {full && tab === 'daily' && <DailyReports />}
+      {full && tab === 'ai' && <AIReport />}
     </div>
   )
 }

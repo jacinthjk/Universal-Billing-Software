@@ -8,6 +8,8 @@ import Register from './pages/auth/Register'
 import Onboarding from './pages/Onboarding'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Staff = lazy(() => import('./pages/Staff'))
+const Bank = lazy(() => import('./pages/Bank'))
 const POS = lazy(() => import('./pages/POS'))
 const Sales = lazy(() => import('./pages/Sales'))
 const SaleDetail = lazy(() => import('./pages/SaleDetail'))
@@ -69,6 +71,8 @@ export default function App() {
           <Route path="ai" element={<AIAssistant />} />
           <Route path="settings" element={<Settings />} />
           <Route path="whatsapp" element={<WhatsApp />} />
+          <Route path="staff" element={<Staff />} />
+          <Route path="bank" element={<Bank />} />
           <Route path="admin" element={<Admin />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

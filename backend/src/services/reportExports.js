@@ -4,7 +4,7 @@ const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 const { money, dayRange } = require('../lib/util');
 const { svgToPng } = require('../lib/svg');
-const { rangeMetrics, stockSnapshot, aiSummary } = require('./reports');
+const { rangeMetrics, stockSnapshot, aiSummary, outstandingReport } = require('./reports');
 const { renderReportSvg } = require('./dailyReport');
 const { FONT_FILES } = require('./invoiceLayout');
 
@@ -40,6 +40,54 @@ function summaryRows(business, m) {
 }
 
 // ─────────────── Excel ───────────────
+
+const OVERDUE_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE2E2' } };
+
+/** Outstanding bills sheet: one row per unpaid bill, oldest first; bills over 30 days shaded red. */
+function addOutstandingSheet(wb, business, out, { brand, moneyFmt }) {
+  const t = business.terminology;
+  const ws = wb.addWorksheet('Outstanding', { views: [{ state: 'frozen', ySplit: 6 }] });
+  ws.getCell('A1').value = `${business.name} - Outstanding ${t.invoice.toLowerCase()}s`;
+  ws.getCell('A1').font = { bold: true, size: 14, color: { argb: `FF${brand}` } };
+  ws.getCell('A2').value = `As of ${out.asOf}   ·   ${out.totals.count} unpaid ${t.invoice.toLowerCase()}s, ${money(out.totals.due, business.currency)} due   ·   Generated: ${generatedAtText(business)}`;
+  ws.getCell('A2').font = { size: 10, color: { argb: 'FF666666' } };
+  ws.getCell('A3').value = `Shaded rows have been outstanding for more than ${out.overdueAfter} days: ${out.totals.overdueCount} ${t.invoice.toLowerCase()}s, ${money(out.totals.overdueDue, business.currency)}`;
+  ws.getCell('A3').font = { bold: true, size: 10, color: { argb: 'FFB91C1C' } };
+  ws.getCell('A4').value = out.buckets.map((b) => `${b.label}: ${money(b.amount, business.currency)} (${b.count})`).join('   ·   ');
+  ws.getCell('A4').font = { size: 10 };
+  const cols = [[t.invoice, 16], ['Date', 12], [t.customer, 26], ['Phone', 15], ['Total', 14], ['Paid', 14], ['Balance due', 14], ['Outstanding days', 17]];
+  const header = ws.getRow(6);
+  cols.forEach(([h, w], i) => { header.getCell(i + 1).value = h; ws.getColumn(i + 1).width = w; });
+  header.eachCell((c) => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${brand}` } }; });
+  for (const b of out.bills) {
+    const row = ws.addRow([b.number, b.date, b.name, b.phone || '', b.total, b.paid, b.due, b.days]);
+    [5, 6, 7].forEach((c) => { row.getCell(c).numFmt = moneyFmt; });
+    if (b.overdue) {
+      row.eachCell({ includeEmpty: true }, (c) => { c.fill = OVERDUE_FILL; });
+      row.getCell(8).font = { bold: true, color: { argb: 'FFB91C1C' } };
+    }
+  }
+  if (!out.bills.length) ws.addRow(['Every bill is fully paid']);
+  return ws;
+}
+
+/** Stand-alone Outstanding workbook (Reports → Outstanding → Excel). */
+async function outstandingWorkbook(business, out) {
+  const wb = new ExcelJS.Workbook();
+  const brand = (business.theme.primary || '#2563eb').replace('#', '').toUpperCase();
+  const moneyFmt = business.currency === 'INR' ? '"₹"#,##0.00' : '#,##0.00';
+  addOutstandingSheet(wb, business, out, { brand, moneyFmt });
+  const t = business.terminology;
+  const ws = wb.addWorksheet(`By ${t.customer.toLowerCase()}`);
+  [[t.customer, 28], ['Phone', 16], [`${t.invoice}s`, 10], ['Balance due', 16], ['Oldest (days)', 14]].forEach(([h, w], i) => { ws.getRow(1).getCell(i + 1).value = h; ws.getColumn(i + 1).width = w; });
+  ws.getRow(1).eachCell((c) => { c.font = { bold: true, color: { argb: 'FFFFFFFF' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${brand}` } }; });
+  for (const c of out.customers) {
+    const row = ws.addRow([c.name, c.phone || '', c.bills, c.due, c.oldestDays]);
+    row.getCell(4).numFmt = moneyFmt;
+    if (c.oldestDays > out.overdueAfter) row.eachCell({ includeEmpty: true }, (cell) => { cell.fill = OVERDUE_FILL; });
+  }
+  return Buffer.from(await wb.xlsx.writeBuffer());
+}
 
 async function buildWorkbook(business, m, { variant = 'daily' } = {}) {
   const wb = new ExcelJS.Workbook();
@@ -105,6 +153,7 @@ async function buildWorkbook(business, m, { variant = 'daily' } = {}) {
     sheet('Stock alerts', [{ header: t.product, width: 34 }, { header: 'In stock', width: 12 }, { header: 'Unit', width: 10 }, { header: 'Reorder level', width: 14 }, { header: 'Status', width: 12 }],
       m.stock.alerts.map((a) => [a.name, a.qty, a.unit, a.reorderLevel, a.status === 'OUT' ? 'Out of stock' : 'Low stock']));
   }
+  if (m.outstanding) addOutstandingSheet(wb, business, m.outstanding, { brand, moneyFmt });
   if (m.ai?.topAsked?.length) sheet('AI questions', [{ header: 'Most asked about', width: 34 }, { header: 'Times', width: 10 }], m.ai.topAsked.map((q) => [q.query, q.count]));
 
   return Buffer.from(await wb.xlsx.writeBuffer());
@@ -114,13 +163,15 @@ async function buildWorkbook(business, m, { variant = 'daily' } = {}) {
 
 function buildPdf(business, m, png, { variant = 'daily' } = {}) {
   return new Promise((resolve) => {
-    const doc = new PDFDocument({ size: [540, 960], margin: 0, info: { Title: `${business.name} - ${title(variant)} ${periodText(m)}`, Author: business.name } });
+    // First page: the report image at its own proportions (PNG width/height from the IHDR header).
+    const pageH = Math.round((540 * png.readUInt32BE(20)) / png.readUInt32BE(16));
+    const doc = new PDFDocument({ size: [540, pageH], margin: 0, info: { Title: `${business.name} - ${title(variant)} ${periodText(m)}`, Author: business.name } });
     const chunks = [];
     doc.on('data', (c) => chunks.push(c));
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.registerFont('regular', FONT_FILES.regular);
     doc.registerFont('bold', FONT_FILES.bold);
-    doc.image(png, 0, 0, { width: 540, height: 960 });
+    doc.image(png, 0, 0, { width: 540, height: pageH });
 
     const brand = business.theme.primary || '#2563eb';
     const cur = (v) => money(v, business.currency);
@@ -150,7 +201,7 @@ function buildPdf(business, m, png, { variant = 'daily' } = {}) {
       };
       draw(cols.map((c) => c.h), true, brand);
       if (!rows.length) draw(['No data', ...cols.slice(1).map(() => '')]);
-      rows.forEach((r) => draw(r));
+      rows.forEach((r) => (Array.isArray(r) ? draw(r) : draw(r.cells, r.bold, r.fill)));
       y += 14;
     };
 
@@ -172,6 +223,14 @@ function buildPdf(business, m, png, { variant = 'daily' } = {}) {
     table([{ h: 'Category', w: Wd * 0.6 }, { h: 'Sales', w: Wd * 0.4, align: 'right' }], m.categories.map((c) => [c.name, cur(c.value)]));
     heading('Payments');
     table([{ h: 'Method', w: Wd * 0.6 }, { h: 'Amount', w: Wd * 0.4, align: 'right' }], m.payments.map((p) => [p.method, cur(p.amount)]));
+    if (m.outstanding) {
+      const out = m.outstanding;
+      heading(`Outstanding ${business.terminology.invoice.toLowerCase()}s · ${cur(out.totals.due)} due`);
+      doc.font('regular').fontSize(8.5).fillColor('#b91c1c').text(`Shaded rows are outstanding for more than ${out.overdueAfter} days (${out.totals.overdueCount}, ${cur(out.totals.overdueDue)}).  ${out.buckets.map((b) => `${b.label}: ${cur(b.amount)}`).join('  ·  ')}`, M, y, { width: Wd });
+      y += 26;
+      table([{ h: business.terminology.invoice, w: 80 }, { h: 'Date', w: 66 }, { h: business.terminology.customer, w: Wd - 80 - 66 - 90 - 60 }, { h: 'Balance due', w: 90, align: 'right' }, { h: 'Days', w: 60, align: 'right' }],
+        out.bills.slice(0, 150).map((b) => ({ cells: [b.number, b.date, b.name, cur(b.due), b.days], bold: b.overdue, fill: b.overdue ? '#fde2e2' : null })));
+    }
     if (m.stock?.alerts?.length) {
       heading('Stock alerts');
       table([{ h: business.terminology.product, w: Wd * 0.55 }, { h: 'In stock', w: Wd * 0.2, align: 'right' }, { h: 'Status', w: Wd * 0.25 }],
@@ -187,11 +246,12 @@ async function overviewMetrics(business, from, to) {
   const m = await rangeMetrics(business, from, to);
   const { start } = dayRange(from, business.timezone);
   const { end } = dayRange(to, business.timezone);
-  const [stock, ai] = await Promise.all([
+  const [stock, ai, outstanding] = await Promise.all([
     stockSnapshot(business.id),
     business.settings.modules.includes('ai') ? aiSummary(business.id, start, end) : null,
+    outstandingReport(business),
   ]);
-  return { ...m, stock, ai };
+  return { ...m, stock, ai, outstanding };
 }
 
 /** Builds the Overview report for a date range in the requested format: 'png' | 'pdf' | 'xlsx'. */
@@ -205,4 +265,4 @@ async function overviewExport(business, from, to, format, { includeCost = true }
   return { buffer: await buildPdf(business, m, png, { variant: 'overview' }), filename: `${base}.pdf`, mime: 'application/pdf' };
 }
 
-module.exports = { buildWorkbook, buildPdf, overviewExport, overviewMetrics };
+module.exports = { buildWorkbook, buildPdf, overviewExport, overviewMetrics, outstandingWorkbook };

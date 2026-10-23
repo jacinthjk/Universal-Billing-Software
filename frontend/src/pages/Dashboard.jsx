@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { useBusinessIcons, CategoryIcon } from '../lib/businessIcons'
 import { Spinner, useFetch } from '../components/ui'
 import DashboardSpotlight from '../components/DashboardSpotlight'
+import { MyAttendance } from './Staff'
 import { money } from '../lib/format'
 
 // ─────────────── Greeting ───────────────
@@ -308,6 +309,7 @@ export default function Dashboard() {
   return (
     <div className="mx-auto max-w-6xl space-y-5 sm:space-y-6">
       <Greeting name={user.name.split(' ')[0]} />
+      <MyAttendance compact />
       <TodayAtAGlance m={data.metrics} />
       <Attention m={data.metrics} followups={data.followupsDue.length} extras={data.extras} />
       <DashboardSpotlight data={data} />

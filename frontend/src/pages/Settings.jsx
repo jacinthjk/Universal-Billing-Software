@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Plus, Upload, Download, Lock, Building2, Palette, Receipt, Users, ShieldCheck } from 'lucide-react'
 import api, { openFile } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
@@ -145,8 +146,8 @@ function Billing() {
       </Card>
       <Card title="Modules">
         <p className="mb-2 text-sm text-slate-500">Turn features on or off for this business.</p>
-        {['pos', 'products', 'inventory', 'purchases', 'customers', 'enquiries', 'orders', 'website', 'reports', 'ai'].map((m) => (
-          <Toggle key={m} checked={s.modules.includes(m)} onChange={(v) => setS({ ...s, modules: v ? [...s.modules, m] : s.modules.filter((x) => x !== m) })} label={titleCase(m === 'ai' ? 'AI assistant' : m === 'pos' ? 'POS' : m)} />
+        {['pos', 'products', 'inventory', 'purchases', 'customers', 'enquiries', 'orders', 'website', 'reports', 'ai', 'staff', 'bank'].map((m) => (
+          <Toggle key={m} checked={s.modules.includes(m)} onChange={(v) => setS({ ...s, modules: v ? [...s.modules, m] : s.modules.filter((x) => x !== m) })} label={{ ai: 'AI assistant', pos: 'POS', staff: 'Employees (attendance & leave)', bank: 'Banking (credits & debits)' }[m] || titleCase(m)} />
         ))}
       </Card>
       <Card title="Daily report">
@@ -300,7 +301,10 @@ export default function Settings() {
     ...(can('settings.manage') ? [{ value: 'profile', label: 'Business', icon: Building2 }, { value: 'branding', label: 'Theme & branding', icon: Palette }, { value: 'billing', label: 'Billing & modules', icon: Receipt }] : []),
     ...(can('users.manage') ? [{ value: 'team', label: 'Team & roles', icon: Users }, { value: 'audit', label: 'Audit & export', icon: ShieldCheck }] : []),
   ]
-  const [tab, setTab] = useState(tabs[0]?.value)
+  // ?tab= lets the side menu open a section directly.
+  const [params, setParams] = useSearchParams()
+  const tab = tabs.some((x) => x.value === params.get('tab')) ? params.get('tab') : tabs[0]?.value
+  const setTab = (v) => setParams({ tab: v })
   if (!meta) return <Spinner />
   return (
     <div>
