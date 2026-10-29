@@ -100,8 +100,9 @@ router.post('/', validate(z.object({
 router.get('/current', requireBusiness, ah(async (req, res) => {
   res.json({
     business: req.business,
-    role: req.membership.role.name,
+    role: req.preview?.roleName || req.membership.role.name,
     permissions: req.perms,
+    preview: req.preview || null,
     websiteUrl: `${config.publicAppUrl}/s/${req.business.slug}`,
   });
 }));

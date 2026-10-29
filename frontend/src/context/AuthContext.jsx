@@ -13,7 +13,15 @@ export function AuthProvider({ children }) {
 
   const loadBusiness = useCallback(async (id) => {
     session.businessId = id
-    const { data } = await api.get('/businesses/current', { headers: { 'X-Business-Id': id } })
+    let data
+    try {
+      ({ data } = await api.get('/businesses/current', { headers: { 'X-Business-Id': id } }))
+    } catch (e) {
+      // A preview of a role that no longer exists: drop it and load normally.
+      if (!session.previewRole) throw e
+      session.previewRole = null
+      ;({ data } = await api.get('/businesses/current', { headers: { 'X-Business-Id': id } }))
+    }
     setCurrent(data)
     applyTheme(data.business.theme)
     setFavicon(data.business.logoUrl)
@@ -62,6 +70,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     session.token = null
     session.businessId = null
+    session.previewRole = null
     setUser(null)
     setCurrent(null)
     setBusinesses([])
@@ -75,7 +84,14 @@ export function AuthProvider({ children }) {
   }
 
   const switchBusiness = async (id) => {
+    session.previewRole = null
     await loadBusiness(id)
+  }
+
+  // See the portal as another role (read-only); pass null to return to your own view.
+  const previewAs = async (roleId) => {
+    session.previewRole = roleId || null
+    if (current) await loadBusiness(current.business.id)
   }
 
   const refreshBusiness = async () => {
@@ -87,12 +103,12 @@ export function AuthProvider({ children }) {
     const perms = current?.permissions || []
     const business = current?.business
     return {
-      user, businesses, business, role: current?.role, permissions: perms, websiteUrl: current?.websiteUrl, meta, loading,
+      user, businesses, business, role: current?.role, permissions: perms, websiteUrl: current?.websiteUrl, meta, loading, preview: current?.preview || null,
       can: (...p) => perms.includes('*') || p.some((x) => perms.includes(x)),
       hasModule: (m) => !!business?.settings?.modules?.includes(m),
       t: (key) => business?.terminology?.[key] || key,
       currency: business?.currency || 'INR',
-      login, register, logout, switchBusiness, refreshBusiness, refreshMemberships, setUser,
+      login, register, logout, switchBusiness, refreshBusiness, refreshMemberships, setUser, previewAs,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, businesses, current, meta, loading])

@@ -20,6 +20,17 @@ async function requireBusiness(req, res, next) {
     req.membership = membership;
     req.perms = membership.role.permissions;
     req.can = (p) => has(req.perms, p);
+    // Role preview: someone who manages users can see the portal exactly as another role does.
+    // The server applies that role's permissions, and nothing can be changed while previewing.
+    const previewId = req.headers['x-preview-role'];
+    if (previewId && req.can('users.manage')) {
+      const role = await prisma.role.findFirst({ where: { id: String(previewId), businessId } });
+      if (!role) throw badRequest('That role no longer exists');
+      if (!['GET', 'HEAD'].includes(req.method)) throw forbidden(`Preview mode is read-only. Exit the ${role.name} preview to make changes.`);
+      req.preview = { roleId: role.id, roleName: role.name };
+      req.perms = role.permissions;
+      req.can = (p) => has(req.perms, p);
+    }
     next();
   } catch (e) {
     next(e);

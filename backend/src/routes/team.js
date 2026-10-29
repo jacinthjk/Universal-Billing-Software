@@ -3,38 +3,85 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { z } = require('zod');
 const { prisma } = require('../lib/prisma');
-const { ah, badRequest, notFound, conflict } = require('../lib/errors');
+const { ah, badRequest, notFound, conflict, forbidden } = require('../lib/errors');
 const { validate } = require('../middleware/validate');
 const { requirePerm } = require('../middleware/tenant');
 const { ALL } = require('../lib/permissions');
 const { audit } = require('../lib/audit');
+const config = require('../config');
+const messaging = require('../services/messaging');
+
+const tempPasswordFor = () => crypto.randomBytes(6).toString('base64url');
+
+// WhatsApp message carrying a temporary password and where to log in.
+const passwordMessage = (business, user, password, isNew) => [
+  `Hello ${user.name},`,
+  '',
+  isNew ? `You have been added to *${business.name}* on the billing portal.` : `Your password for *${business.name}* on the billing portal has been reset.`,
+  '',
+  `Login: ${config.publicAppUrl}/login`,
+  `Email: ${user.email}`,
+  `Temporary password: ${password}`,
+  '',
+  'You will be asked to choose your own password after logging in.',
+].join('\n');
+
+async function sendPassword(req, user, password, isNew) {
+  if (!user.phone) return { status: 'NO_PHONE' };
+  if (!messaging.isReady(req.business)) return { status: 'NOT_CONNECTED' };
+  const r = await messaging.send(req.business, { to: user.phone, text: passwordMessage(req.business, user, password, isNew) }, { kind: 'PASSWORD', userId: req.user.id, name: user.name });
+  return { status: r.status, to: r.recipient, error: r.error };
+}
 
 router.use(requirePerm('users.manage'));
 
 router.get('/', ah(async (req, res) => {
   const [members, roles] = await Promise.all([
-    prisma.membership.findMany({ where: { businessId: req.businessId }, include: { user: { select: { id: true, name: true, email: true, phone: true } }, role: true }, orderBy: { createdAt: 'asc' } }),
+    prisma.membership.findMany({ where: { businessId: req.businessId }, include: { user: { select: { id: true, name: true, email: true, phone: true, mustChangePassword: true } }, role: true }, orderBy: { createdAt: 'asc' } }),
     prisma.role.findMany({ where: { businessId: req.businessId }, orderBy: { createdAt: 'asc' } }),
   ]);
-  res.json({ members, roles });
+  res.json({ members, roles, whatsappReady: messaging.isReady(req.business) });
 }));
 
 // Add a user to this business. Creates the platform account with a temporary password if needed.
-router.post('/', validate(z.object({ name: z.string().trim().min(2), email: z.string().trim().email(), roleId: z.string() })), ah(async (req, res) => {
+router.post('/', validate(z.object({ name: z.string().trim().min(2), email: z.string().trim().email(), phone: z.string().trim().max(20).optional(), roleId: z.string(), sendWhatsApp: z.boolean().optional() })), ah(async (req, res) => {
   const role = await prisma.role.findFirst({ where: { id: req.body.roleId, businessId: req.businessId } });
   if (!role) throw badRequest('Invalid role');
   const email = req.body.email.toLowerCase();
   let user = await prisma.user.findUnique({ where: { email } });
   let tempPassword = null;
   if (!user) {
-    tempPassword = crypto.randomBytes(6).toString('base64url');
-    user = await prisma.user.create({ data: { name: req.body.name, email, passwordHash: await bcrypt.hash(tempPassword, 12) } });
+    tempPassword = tempPasswordFor();
+    user = await prisma.user.create({ data: { name: req.body.name, email, phone: req.body.phone || null, passwordHash: await bcrypt.hash(tempPassword, 12), mustChangePassword: true } });
   }
   const existing = await prisma.membership.findUnique({ where: { userId_businessId: { userId: user.id, businessId: req.businessId } } });
   if (existing) throw conflict('This user is already a member of the business');
   const m = await prisma.membership.create({ data: { userId: user.id, businessId: req.businessId, roleId: role.id } });
   await audit({ businessId: req.businessId, userId: req.user.id, action: 'team.add', entity: 'Membership', entityId: m.id, data: { email, role: role.name } });
-  res.status(201).json({ membership: m, tempPassword });
+  const delivery = tempPassword && req.body.sendWhatsApp ? await sendPassword(req, user, tempPassword, true) : null;
+  res.status(201).json({ membership: m, tempPassword, delivery });
+}));
+
+// Owner only: issue a new temporary password for a member and optionally send it on WhatsApp.
+// Refused for accounts that also belong to other businesses (or the platform admin), so one
+// business owner can never take over a login another business depends on.
+router.post('/:id/reset-password', validate(z.object({ phone: z.string().trim().max(20).optional(), sendWhatsApp: z.boolean().optional() })), ah(async (req, res) => {
+  if (req.membership.role.name !== 'Owner') throw forbidden('Only the business owner can reset passwords');
+  const m = await prisma.membership.findFirst({ where: { id: req.params.id, businessId: req.businessId }, include: { user: true, role: true } });
+  if (!m) throw notFound();
+  if (m.userId === req.user.id) throw badRequest('Change your own password from your profile instead');
+  if (m.role.name === 'Owner') throw badRequest('Another owner\'s password cannot be reset here');
+  if (m.user.isPlatformAdmin) throw badRequest('This account is managed by the platform administrator');
+  const others = await prisma.membership.count({ where: { userId: m.userId, businessId: { not: req.businessId } } });
+  if (others) throw badRequest('This person also uses the portal for another business, so only they can change their password');
+  const tempPassword = tempPasswordFor();
+  const user = await prisma.user.update({
+    where: { id: m.userId },
+    data: { passwordHash: await bcrypt.hash(tempPassword, 12), mustChangePassword: true, ...(req.body.phone ? { phone: req.body.phone } : {}) },
+  });
+  const delivery = req.body.sendWhatsApp ? await sendPassword(req, user, tempPassword, false) : null;
+  await audit({ businessId: req.businessId, userId: req.user.id, action: 'team.password_reset', entity: 'Membership', entityId: m.id, data: { email: user.email, whatsapp: delivery?.status || 'NOT_SENT' } });
+  res.json({ tempPassword, delivery, user: { name: user.name, email: user.email, phone: user.phone } });
 }));
 
 router.patch('/:id', validate(z.object({ roleId: z.string().optional(), active: z.boolean().optional() })), ah(async (req, res) => {

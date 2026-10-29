@@ -13,16 +13,18 @@ datasource db {
 // ───────────────────────────── Platform ─────────────────────────────
 
 model User {
-  id              String       @id @default(cuid())
-  name            String
-  email           String       @unique
-  phone           String?
-  passwordHash    String
-  isPlatformAdmin Boolean      @default(false)
-  active          Boolean      @default(true)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  memberships     Membership[]
+  id                 String       @id @default(cuid())
+  name               String
+  email              String       @unique
+  phone              String?
+  passwordHash       String
+  isPlatformAdmin    Boolean      @default(false)
+  active             Boolean      @default(true)
+  // Set when someone else issues a temporary password; the user must choose their own at next login.
+  mustChangePassword Boolean      @default(false)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  memberships        Membership[]
 }
 
 model Business {

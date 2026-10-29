@@ -45,3 +45,8 @@ services:
         sync: false
       - key: WHATSAPP_ACCESS_TOKEN
         sync: false
+      # Help centre "Contact us" details, built into the web app (set, then redeploy)
+      - key: VITE_SUPPORT_EMAIL
+        sync: false
+      - key: VITE_SUPPORT_WHATSAPP
+        sync: false

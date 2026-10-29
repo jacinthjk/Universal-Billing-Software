@@ -2,19 +2,20 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   Home, Boxes, BarChart3, PlusCircle, Type, Globe, Settings, ChevronsUpDown, ChevronDown, Check, Plus, LogOut, Bell, Menu, X, Shield, Store,
-  IdCard, Landmark,
+  IdCard, Landmark, LifeBuoy,
 } from 'lucide-react'
 import { TEXT_SIZES, applyTextSize, getTextSize } from '../lib/textSize'
 import { useAuth } from '../context/AuthContext'
 import { BusinessMark } from '../lib/icons'
 import { useBusinessIcons } from '../lib/businessIcons'
 import api from '../lib/api'
+import { PreviewBanner, ForcePasswordChange } from './AccountPrompts'
 import { ago } from '../lib/format'
 
 // Sidebar: main menus that open to show their sub-menus. Sub-menus that point at a page tab
 // (e.g. /reports?tab=daily) carry `tab`; `first` marks the tab a page opens on by default.
 function useNav() {
-  const { can, hasModule, t, user } = useAuth()
+  const { can, hasModule, t, user, preview } = useAuth()
   const bi = useBusinessIcons() // business-specific icons for the key sections
   const inv = t('invoice')
   const menus = [
@@ -86,7 +87,8 @@ function useNav() {
         { to: '/settings', tab: 'audit', label: 'Audit & export', show: can('users.manage') },
       ],
     },
-    { key: 'admin', label: 'Platform admin', hint: 'All businesses', icon: Shield, to: '/admin', show: !!user.isPlatformAdmin },
+    { key: 'help', label: 'Help & guide', hint: 'How to use the app, contact us', icon: LifeBuoy, to: '/help', show: true },
+    { key: 'admin', label: 'Platform admin', hint: 'All businesses', icon: Shield, to: '/admin', show: !!user.isPlatformAdmin && !preview },
   ]
   return menus
     .map((m) => (m.items ? { ...m, items: m.items.filter((i) => i.show) } : m))
@@ -362,6 +364,8 @@ export default function Layout() {
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
+        <PreviewBanner />
+        <ForcePasswordChange />
         <header className="no-print flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-3 sm:h-16 sm:gap-3 sm:px-4">
           <button className="flex h-10 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 text-sm font-semibold hover:bg-slate-100 lg:hidden" onClick={() => setMobile(true)} aria-label="Open menu">
             <Menu className="size-5" /> <span className="hidden sm:inline">Menu</span>
@@ -381,6 +385,7 @@ export default function Layout() {
                 <bi.pos className="size-4.5" /> New {t('invoice').toLowerCase()}
               </button>
             )}
+            <button onClick={() => navigate('/help')} className="hidden rounded-full p-2 text-slate-500 hover:bg-slate-100 sm:block" aria-label="Help & guide" title="Help & guide"><LifeBuoy className="size-5" /></button>
             <Notifications />
           </div>
         </header>

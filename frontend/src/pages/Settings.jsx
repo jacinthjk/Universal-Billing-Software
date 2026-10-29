@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { Plus, Upload, Download, Lock, Building2, Palette, Receipt, Users, ShieldCheck } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Plus, Upload, Download, Lock, Building2, Palette, Receipt, Users, ShieldCheck, KeyRound, Eye, Copy, MessageCircle, CheckCircle2, AlertTriangle } from 'lucide-react'
+import toast from 'react-hot-toast'
 import api, { openFile } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { applyTheme } from '../lib/theme'
@@ -208,55 +209,117 @@ function BillPasscode() {
   )
 }
 
+// Login details for a member: copy, or share on WhatsApp by hand when the business number isn't linked.
+function PasswordIssued({ issued, onClose }) {
+  const { business } = useAuth()
+  if (!issued) return null
+  const { name, email, phone, tempPassword, delivery, isNew } = issued
+  const text = [`Hello ${name},`, '', isNew ? `You have been added to ${business.name} on the billing portal.` : `Your password for ${business.name} on the billing portal has been reset.`, '', `Login: ${window.location.origin}/login`, `Email: ${email}`, `Temporary password: ${tempPassword}`, '', 'You will be asked to choose your own password after logging in.'].join('\n')
+  const waNumber = String(phone || '').replace(/\D/g, '').replace(/^0/, '')
+  const waLink = `https://wa.me/${waNumber.length === 10 ? `91${waNumber}` : waNumber}?text=${encodeURIComponent(text)}`
+  const sent = delivery?.status === 'SENT'
+  const note = {
+    SENT: `Sent on WhatsApp to ${delivery?.to}.`,
+    NO_PHONE: 'Not sent on WhatsApp: no mobile number for this person.',
+    NOT_CONNECTED: 'Not sent: your business WhatsApp is not linked. Share it yourself below.',
+    FAILED: `WhatsApp sending failed${delivery?.error ? ` (${delivery.error})` : ''}. Share it yourself below.`,
+  }[delivery?.status]
+  const copy = async () => { try { await navigator.clipboard.writeText(text); toast.success('Login details copied') } catch { toast.error('Copy failed - select the text instead') } }
+  return (
+    <Modal open onClose={onClose} title={isNew ? 'Member added' : 'Password reset'} size="sm" footer={<Button onClick={onClose}>Done</Button>}>
+      <div className="space-y-3 text-sm">
+        {note && <div className={`flex gap-2 rounded-xl p-3 ${sent ? 'bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-900 ring-1 ring-amber-200'}`}>{sent ? <CheckCircle2 className="size-4.5 shrink-0" /> : <AlertTriangle className="size-4.5 shrink-0" />}{note}</div>}
+        <p className="text-slate-700">Temporary password for <b>{name}</b> ({email}). They will choose their own password after logging in.</p>
+        <code className="block select-all rounded-lg bg-slate-100 p-3 text-center text-lg tracking-wide">{tempPassword}</code>
+        {!sent && (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" onClick={copy}><Copy className="size-3.5" /> Copy login details</Button>
+            <a href={waLink} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center gap-2 rounded-[var(--radius)] bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700"><MessageCircle className="size-3.5" /> Share on WhatsApp</a>
+          </div>
+        )}
+        <p className="text-xs text-slate-500">This password is shown only once. Resetting again creates a new one.</p>
+      </div>
+    </Modal>
+  )
+}
+
 function Team() {
-  const { meta, user } = useAuth()
+  const { meta, user, role: myRole, previewAs } = useAuth()
+  const navigate = useNavigate()
   const { data, loading, reload } = useFetch('/team')
   const [invite, setInvite] = useState(null)
   const [role, setRole] = useState(null)
-  const [temp, setTemp] = useState(null)
+  const [reset, setReset] = useState(null)
+  const [issued, setIssued] = useState(null)
   if (loading || !data) return <Spinner />
+  const isOwner = myRole === 'Owner'
   const add = async () => {
-    const { data: r } = await act(() => api.post('/team', invite), 'Member added')
-    setInvite(null); setTemp(r.tempPassword); reload()
+    const { data: r } = await act(() => api.post('/team', { name: invite.name, email: invite.email, phone: invite.phone || undefined, roleId: invite.roleId, sendWhatsApp: !!invite.sendWhatsApp }), 'Member added')
+    if (r.tempPassword) setIssued({ name: invite.name, email: invite.email, phone: invite.phone, tempPassword: r.tempPassword, delivery: r.delivery, isNew: true })
+    setInvite(null); reload()
+  }
+  const doReset = async () => {
+    const { data: r } = await act(() => api.post(`/team/${reset.id}/reset-password`, { phone: reset.phone || undefined, sendWhatsApp: !!reset.sendWhatsApp }), 'New password created')
+    setIssued({ ...r.user, tempPassword: r.tempPassword, delivery: r.delivery, isNew: false })
+    setReset(null); reload()
   }
   const saveRole = async () => {
     await act(() => (role.id ? api.put(`/team/roles/${role.id}`, { name: role.name, permissions: role.permissions }) : api.post('/team/roles', { name: role.name, permissions: role.permissions })), 'Role saved')
     setRole(null); reload()
   }
+  const preview = async (r) => { await previewAs(r.id); navigate('/') }
+  const waHint = data.whatsappReady ? 'Sent from your linked business WhatsApp' : 'Link WhatsApp on the WhatsApp page to send automatically'
   return (
     <div className="space-y-4">
-      <Card title="Members" bodyClass="p-0" actions={<Button size="sm" onClick={() => setInvite({ name: '', email: '', roleId: data.roles.find((r) => r.name === 'Cashier')?.id })}><Plus className="size-4" /> Add member</Button>}>
+      <Card title="Members" bodyClass="p-0 overflow-x-auto" actions={<Button size="sm" onClick={() => setInvite({ name: '', email: '', phone: '', roleId: data.roles.find((r) => r.name === 'Cashier')?.id, sendWhatsApp: data.whatsappReady })}><Plus className="size-4" /> Add member</Button>}>
         <table className="table-base">
-          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Active</th></tr></thead>
-          <tbody>{data.members.map((m) => (
-            <tr key={m.id}>
-              <td>{m.user.name}</td><td className="text-slate-500">{m.user.email}</td>
-              <td>{m.user.id === user.id ? <Badge color="brand">{m.role.name}</Badge> : <Select className="w-44 py-1" value={m.roleId} onChange={async (e) => { await act(() => api.patch(`/team/${m.id}`, { roleId: e.target.value }), 'Role updated'); reload() }} options={data.roles.map((r) => ({ value: r.id, label: r.name }))} />}</td>
-              <td>{m.user.id !== user.id && <Toggle checked={m.active} onChange={async (v) => { await act(() => api.patch(`/team/${m.id}`, { active: v })); reload() }} label="" />}</td>
-            </tr>
-          ))}</tbody>
+          <thead><tr><th>Name</th><th>Mobile</th><th>Role</th><th>Active</th><th className="text-right">Password</th></tr></thead>
+          <tbody>{data.members.map((m) => {
+            const self = m.user.id === user.id
+            return (
+              <tr key={m.id}>
+                <td><div className="font-medium">{m.user.name}{self && <span className="text-xs font-normal text-slate-400"> (you)</span>}</div><div className="text-xs text-slate-500">{m.user.email}</div>{m.user.mustChangePassword && <Badge color="amber" className="mt-1">Temporary password</Badge>}</td>
+                <td className="text-slate-600">{m.user.phone || '—'}</td>
+                <td>{self ? <Badge color="brand">{m.role.name}</Badge> : <Select className="w-44 py-1" value={m.roleId} onChange={async (e) => { await act(() => api.patch(`/team/${m.id}`, { roleId: e.target.value }), 'Role updated'); reload() }} options={data.roles.map((r) => ({ value: r.id, label: r.name }))} />}</td>
+                <td>{!self && <Toggle checked={m.active} onChange={async (v) => { await act(() => api.patch(`/team/${m.id}`, { active: v })); reload() }} label="" />}</td>
+                <td className="text-right">{isOwner && !self && m.role.name !== 'Owner' && (
+                  <Button size="sm" variant="secondary" onClick={() => setReset({ id: m.id, name: m.user.name, email: m.user.email, phone: m.user.phone || '', sendWhatsApp: data.whatsappReady })}><KeyRound className="size-3.5" /> Reset &amp; send</Button>
+                )}</td>
+              </tr>
+            )
+          })}</tbody>
         </table>
       </Card>
       <Card title="Roles & permissions" bodyClass="p-0" actions={<Button size="sm" variant="secondary" onClick={() => setRole({ name: '', permissions: [] })}><Plus className="size-4" /> Custom role</Button>}>
+        <p className="border-b border-slate-100 px-4 py-2.5 text-sm text-slate-600"><Eye className="mr-1 inline size-4 text-brand" />Use <b>Preview</b> to see the portal exactly as that role sees it. Nothing can be changed while previewing.</p>
         <ul className="divide-y divide-slate-100">{data.roles.map((r) => (
-          <li key={r.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+          <li key={r.id} className="flex flex-wrap items-center gap-3 px-4 py-2.5 text-sm">
             <span className="font-medium">{r.name}</span>{r.isSystem && <Badge>system</Badge>}
             <span className="flex-1 truncate text-xs text-slate-500">{r.permissions.includes('*') ? 'Full access' : `${r.permissions.length} permissions`}</span>
-            {r.name !== 'Owner' && <Button size="sm" variant="ghost" onClick={() => setRole(r)}>Edit</Button>}
+            {r.name !== 'Owner' && <>
+              <Button size="sm" variant="secondary" onClick={() => preview(r)}><Eye className="size-3.5" /> Preview</Button>
+              <Button size="sm" variant="ghost" onClick={() => setRole(r)}>Edit</Button>
+            </>}
           </li>
         ))}</ul>
       </Card>
       <Modal open={!!invite} onClose={() => setInvite(null)} title="Add team member" footer={<Button onClick={add} disabled={!invite?.email || !invite?.name}>Add</Button>}>
         {invite && <div className="space-y-3">
           <Field label="Name"><Input value={invite.name} onChange={(e) => setInvite({ ...invite, name: e.target.value })} /></Field>
-          <Field label="Email" hint="Existing platform users are linked; new users get a temporary password"><Input type="email" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} /></Field>
+          <Field label="Email" hint="Used to log in. Existing portal users are linked; new users get a temporary password"><Input type="email" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} /></Field>
+          <Field label="Mobile (WhatsApp)"><Input inputMode="tel" value={invite.phone} onChange={(e) => setInvite({ ...invite, phone: e.target.value })} /></Field>
           <Field label="Role"><Select value={invite.roleId} onChange={(e) => setInvite({ ...invite, roleId: e.target.value })} options={data.roles.map((r) => ({ value: r.id, label: r.name }))} /></Field>
+          <Toggle checked={!!invite.sendWhatsApp && !!invite.phone} onChange={(v) => setInvite({ ...invite, sendWhatsApp: v })} label="Send login details on WhatsApp" description={invite.phone ? waHint : 'Enter a mobile number to send on WhatsApp'} />
         </div>}
       </Modal>
-      <Modal open={!!temp} onClose={() => setTemp(null)} title="Temporary password" size="sm">
-        <p className="text-sm">Share this one-time password securely. Ask them to change it after logging in.</p>
-        <code className="mt-3 block rounded-lg bg-slate-100 p-3 text-center text-lg">{temp}</code>
+      <Modal open={!!reset} onClose={() => setReset(null)} title={`Reset password · ${reset?.name || ''}`} size="sm" footer={<Button onClick={doReset}><KeyRound className="size-4" /> Reset password</Button>}>
+        {reset && <div className="space-y-3 text-sm">
+          <p className="text-slate-700">A new temporary password is created for <b>{reset.email}</b>. Their old password stops working, and they choose a new one when they next log in.</p>
+          <Field label="Mobile (WhatsApp)"><Input inputMode="tel" value={reset.phone} onChange={(e) => setReset({ ...reset, phone: e.target.value })} /></Field>
+          <Toggle checked={!!reset.sendWhatsApp && !!reset.phone} onChange={(v) => setReset({ ...reset, sendWhatsApp: v })} label="Send it on WhatsApp" description={reset.phone ? waHint : 'Enter a mobile number to send on WhatsApp'} />
+        </div>}
       </Modal>
+      <PasswordIssued issued={issued} onClose={() => setIssued(null)} />
       <Modal open={!!role} onClose={() => setRole(null)} title={role?.id ? `Edit ${role.name}` : 'New role'} size="lg" footer={<Button onClick={saveRole} disabled={!role?.name}>Save role</Button>}>
         {role && <div className="space-y-3">
           <Field label="Role name"><Input value={role.name} onChange={(e) => setRole({ ...role, name: e.target.value })} disabled={role.isSystem} /></Field>

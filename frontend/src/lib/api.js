@@ -2,6 +2,7 @@ import axios from 'axios'
 
 const TOKEN_KEY = 'ubb_token'
 const BUSINESS_KEY = 'ubb_business'
+const PREVIEW_KEY = 'ubb_preview_role'
 
 const safe = (fn, fallback = null) => {
   try { return fn() } catch { return fallback }
@@ -12,6 +13,9 @@ export const session = {
   set token(v) { safe(() => (v ? localStorage.setItem(TOKEN_KEY, v) : localStorage.removeItem(TOKEN_KEY))) },
   get businessId() { return safe(() => localStorage.getItem(BUSINESS_KEY)) },
   set businessId(v) { safe(() => (v ? localStorage.setItem(BUSINESS_KEY, v) : localStorage.removeItem(BUSINESS_KEY))) },
+  // Role being previewed (this browser tab only); the server applies that role's permissions, read-only.
+  get previewRole() { return safe(() => sessionStorage.getItem(PREVIEW_KEY)) },
+  set previewRole(v) { safe(() => (v ? sessionStorage.setItem(PREVIEW_KEY, v) : sessionStorage.removeItem(PREVIEW_KEY))) },
 }
 
 export const API_URL = import.meta.env.VITE_API_URL || '/api'
@@ -24,6 +28,8 @@ api.interceptors.request.use((config) => {
   if (t) config.headers.Authorization = `Bearer ${t}`
   const b = session.businessId
   if (b && !config.headers['X-Business-Id']) config.headers['X-Business-Id'] = b
+  const p = session.previewRole
+  if (p) config.headers['X-Preview-Role'] = p
   return config
 })
 

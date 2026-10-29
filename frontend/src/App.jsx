@@ -10,6 +10,8 @@ import Onboarding from './pages/Onboarding'
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Staff = lazy(() => import('./pages/Staff'))
 const Bank = lazy(() => import('./pages/Bank'))
+const Help = lazy(() => import('./pages/Help'))
+const PublicGuide = lazy(() => import('./pages/Help').then((m) => ({ default: m.PublicGuide })))
 const POS = lazy(() => import('./pages/POS'))
 const Sales = lazy(() => import('./pages/Sales'))
 const SaleDetail = lazy(() => import('./pages/SaleDetail'))
@@ -49,6 +51,7 @@ export default function App() {
         <Route path="/verify/:token" element={<Verify />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/guide" element={<PublicGuide />} />
         <Route path="/onboarding" element={loading ? <Spinner /> : user ? <Onboarding /> : <Navigate to="/login" replace />} />
 
         {/* Business workspace */}
@@ -73,6 +76,7 @@ export default function App() {
           <Route path="whatsapp" element={<WhatsApp />} />
           <Route path="staff" element={<Staff />} />
           <Route path="bank" element={<Bank />} />
+          <Route path="help" element={<Help />} />
           <Route path="admin" element={<Admin />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

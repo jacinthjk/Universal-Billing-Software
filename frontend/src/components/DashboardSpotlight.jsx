@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import {
-  Clock, Flame, LayoutGrid, HandCoins, Crown, PackageSearch, CalendarClock, BellRing, ArrowRight, CheckCircle2, AlertOctagon, AlertTriangle, Hourglass,
+  Clock, Flame, LayoutGrid, HandCoins, Crown, PackageSearch, CalendarClock, BellRing, ArrowRight, CheckCircle2, AlertOctagon, AlertTriangle,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { money, compactMoney, qty, date, ago } from '../lib/format'
@@ -42,38 +42,52 @@ function titles(type, t) {
 
 // ─────────────── Shared pieces ───────────────
 
-function SpotCard({ icon: Icon, title, link, linkLabel = 'View all', children }) {
+// Every card has the same shape: title, one headline figure, up to 4 short rows, then "View all".
+function SpotCard({ icon: Icon, title, headline, sub, link, children }) {
   return (
-    <section className="card flex min-w-0 flex-col p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand-soft text-brand"><Icon className="size-4.5" /></span>
-        <h3 className="min-w-0 flex-1 text-[0.9375rem] font-bold leading-tight text-slate-800">{title}</h3>
-        {link && <Link to={link} className="inline-flex shrink-0 items-center gap-0.5 text-sm font-semibold text-brand">{linkLabel}<ArrowRight className="size-3.5" /></Link>}
+    <section className="card flex min-w-0 flex-col">
+      <div className="flex items-start gap-3 px-4 pt-4">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand"><Icon className="size-4.5" /></span>
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-sm font-semibold text-slate-600">{title}</h3>
+          {headline !== undefined && <div className="text-xl font-extrabold leading-tight tracking-tight text-slate-900">{headline}</div>}
+          {sub && <div className="text-xs text-slate-500">{sub}</div>}
+        </div>
       </div>
-      <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col px-4 pb-3 pt-3">{children}</div>
+      {link && <Link to={link} className="flex items-center justify-between border-t border-slate-100 px-4 py-2.5 text-sm font-semibold text-brand hover:bg-slate-50">View all<ArrowRight className="size-4" /></Link>}
     </section>
   )
 }
 
 const Quiet = ({ icon: Icon = CheckCircle2, children }) => (
-  <div className="flex flex-1 flex-col items-center justify-center gap-1.5 py-6 text-center text-sm text-slate-600"><Icon className="size-9 text-slate-300" strokeWidth={1.5} />{children}</div>
+  <div className="flex flex-1 items-center gap-2.5 rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-600"><Icon className="size-5 shrink-0 text-emerald-600" strokeWidth={1.75} />{children}</div>
 )
 
+// A tidy list row: name (+ small note) on the left, value on the right.
+function Row({ to, lead, name, note, value, valueClass = 'text-slate-900' }) {
+  const body = (
+    <>
+      {lead}
+      <span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-slate-800">{name}</span>{note && <span className="block truncate text-xs text-slate-500">{note}</span>}</span>
+      <span className={`shrink-0 text-sm font-semibold ${valueClass}`}>{value}</span>
+    </>
+  )
+  return <li>{to ? <Link to={to} className="flex items-center gap-2.5 py-1.5 hover:text-brand">{body}</Link> : <div className="flex items-center gap-2.5 py-1.5">{body}</div>}</li>
+}
+
 // Horizontal bars: label + value in ink, bar in brand colour; one series so no legend.
-function BarList({ rows, currency, sub }) {
+function BarList({ rows, currency, note }) {
   const max = Math.max(...rows.map((r) => r.value), 1)
   return (
-    <ul className="space-y-2.5">
-      {rows.map((r) => (
-        <li key={r.name} title={`${r.name}: ${money(r.value, currency, { decimals: 0 })}`}>
+    <ul className="space-y-2">
+      {rows.slice(0, 4).map((r) => (
+        <li key={r.name} title={`${r.name}: ${money(r.value, currency, { decimals: 0 })}${note ? ` · ${note(r)}` : ''}`}>
           <div className="flex items-baseline justify-between gap-2 text-sm">
             <span className="min-w-0 truncate font-medium text-slate-800">{r.name}</span>
-            <b className="shrink-0 text-slate-900">{money(r.value, currency, { decimals: 0 })}</b>
+            <span className="shrink-0"><span className="mr-1.5 text-xs text-slate-500">{note?.(r)}</span><b className="text-slate-900">{money(r.value, currency, { decimals: 0 })}</b></span>
           </div>
-          <div className="mt-1 h-2 rounded-full bg-slate-100">
-            <div className="h-2 rounded-full bg-brand transition-[width] duration-700" style={{ width: `${Math.max((r.value / max) * 100, 2)}%` }} />
-          </div>
-          {sub && <div className="mt-0.5 text-xs text-slate-500">{sub(r)}</div>}
+          <div className="mt-1 h-1.5 rounded-full bg-slate-100"><div className="h-1.5 rounded-full bg-brand transition-[width] duration-700" style={{ width: `${Math.max((r.value / max) * 100, 2)}%` }} /></div>
         </li>
       ))}
     </ul>
@@ -87,19 +101,18 @@ const hourLabel = (h) => `${h % 12 || 12}${h < 12 ? 'am' : 'pm'}`
 // Columns per hour of the day, trimmed to the hours the business is actually busy.
 function BusyHours({ hours, currency, title, inv }) {
   const active = hours.filter((h) => h.bills)
-  if (!active.length) return <SpotCard icon={Clock} title={title}><Quiet icon={Clock}>Your busiest hours show up here as the day goes on</Quiet></SpotCard>
+  if (!active.length) return <SpotCard icon={Clock} title={title} headline="—" sub="No sales yet today"><Quiet icon={Clock}>Your busiest hours show up here as the day goes on.</Quiet></SpotCard>
   const first = Math.min(active[0].hour, 9)
   const last = Math.max(active[active.length - 1].hour, 20)
   const shown = hours.slice(first, last + 1)
   const max = Math.max(...shown.map((h) => h.sales), 1)
   const peak = active.reduce((a, b) => (b.sales > a.sales ? b : a))
   return (
-    <SpotCard icon={Clock} title={title}>
-      <p className="mb-3 text-sm text-slate-700">Busiest so far: <b className="text-slate-900">{hourLabel(peak.hour)}–{hourLabel((peak.hour + 1) % 24)}</b> · {money(peak.sales, currency, { decimals: 0 })}</p>
-      <div className="flex h-32 items-end gap-[2px]" role="img" aria-label={`Sales by hour, busiest ${hourLabel(peak.hour)}`}>
+    <SpotCard icon={Clock} title={title} headline={`${hourLabel(peak.hour)} – ${hourLabel((peak.hour + 1) % 24)}`} sub={`Busiest so far · ${money(peak.sales, currency, { decimals: 0 })}`}>
+      <div className="flex h-24 items-end gap-[2px]" role="img" aria-label={`Sales by hour, busiest ${hourLabel(peak.hour)}`}>
         {shown.map((h) => (
           <div key={h.hour} className="group relative flex h-full min-w-0 flex-1 items-end">
-            <div className={`w-full rounded-t-[4px] ${h.hour === peak.hour ? 'bg-brand' : 'bg-brand/45'} ${h.sales ? '' : 'h-[2px] bg-slate-200'}`}
+            <div className={`w-full rounded-t-[4px] ${h.sales ? (h.hour === peak.hour ? 'bg-brand' : 'bg-brand/40') : 'h-[2px] bg-slate-200'}`}
               style={h.sales ? { height: `${Math.max((h.sales / max) * 100, 4)}%` } : undefined} />
             {/* hover / tap target is the whole column, wider than the bar */}
             <div className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs text-white shadow group-hover:block group-active:block">
@@ -108,15 +121,15 @@ function BusyHours({ hours, currency, title, inv }) {
           </div>
         ))}
       </div>
-      <div className="mt-1 flex justify-between text-xs text-slate-500"><span>{hourLabel(first)}</span><span>{hourLabel(Math.round((first + last) / 2))}</span><span>{hourLabel(last)}</span></div>
+      <div className="mt-1 flex justify-between text-xs text-slate-500"><span>{hourLabel(first)}</span><span>{hourLabel(last)}</span></div>
     </SpotCard>
   )
 }
 
 function Favourites({ week, currency, title }) {
   return (
-    <SpotCard icon={Flame} title={title} link="/reports">
-      {week.top.length ? <BarList rows={week.top} currency={currency} sub={(r) => `${qty(r.qty)} ${r.unit || ''} sold`} /> : <Quiet icon={Flame}>Nothing sold in the last 7 days yet</Quiet>}
+    <SpotCard icon={Flame} title={title} headline={week.top[0]?.name || '—'} sub={week.top[0] ? `Leads the last 7 days` : 'Last 7 days'} link="/reports">
+      {week.top.length ? <BarList rows={week.top} currency={currency} note={(r) => `${qty(r.qty)} ${r.unit || ''}`} /> : <Quiet icon={Flame}>Nothing sold in the last 7 days yet.</Quiet>}
     </SpotCard>
   )
 }
@@ -124,34 +137,21 @@ function Favourites({ week, currency, title }) {
 function Categories({ week, currency, title }) {
   const total = week.categories.reduce((s, c) => s + c.value, 0)
   return (
-    <SpotCard icon={LayoutGrid} title={title} link="/reports">
+    <SpotCard icon={LayoutGrid} title={title} headline={money(total, currency, { decimals: 0 })} sub="Last 7 days" link="/reports">
       {week.categories.length
-        ? <BarList rows={week.categories} currency={currency} sub={(r) => `${total ? Math.round((r.value / total) * 100) : 0}% of the week`} />
-        : <Quiet icon={LayoutGrid}>Group your items into categories to see what's selling</Quiet>}
+        ? <BarList rows={week.categories} currency={currency} note={(r) => `${total ? Math.round((r.value / total) * 100) : 0}%`} />
+        : <Quiet icon={LayoutGrid}>Group your items into categories to see what's selling.</Quiet>}
     </SpotCard>
   )
 }
 
 function Dues({ dues, currency, title, inv }) {
   return (
-    <SpotCard icon={HandCoins} title={title} link="/sales">
-      {!dues.count ? <Quiet>Every {inv} is fully paid</Quiet> : (
-        <>
-          <div className="mb-3 rounded-xl bg-amber-50 px-3 py-2.5 ring-1 ring-amber-200">
-            <div className="text-2xl font-extrabold tracking-tight text-slate-900">{money(dues.amount, currency, { decimals: 0 })}</div>
-            <div className="text-sm text-amber-900">pending on {dues.count} {inv}{dues.count === 1 ? '' : 's'}</div>
-          </div>
-          <ul className="divide-y divide-slate-100">
-            {dues.top.map((d) => (
-              <li key={d.saleId}>
-                <Link to={`/sales/${d.saleId}`} className="flex items-center gap-2 py-2 text-sm hover:text-brand">
-                  <span className="min-w-0 flex-1"><span className="block truncate font-semibold text-slate-800">{d.name}</span><span className="block text-xs text-slate-500">{d.number} · {ago(d.createdAt)}</span></span>
-                  <b className="shrink-0 text-slate-900">{money(d.due, currency, { decimals: 0 })}</b>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </>
+    <SpotCard icon={HandCoins} title={title} headline={money(dues.amount, currency, { decimals: 0 })} sub={dues.count ? `on ${dues.count} unpaid ${inv}${dues.count === 1 ? '' : 's'}` : 'Nothing pending'} link="/reports?tab=outstanding">
+      {!dues.count ? <Quiet>Every {inv} is fully paid.</Quiet> : (
+        <ul className="divide-y divide-slate-100">
+          {dues.top.slice(0, 4).map((d) => <Row key={d.saleId} to={`/sales/${d.saleId}`} name={d.name} note={`${d.number} · ${ago(d.createdAt)}`} value={money(d.due, currency, { decimals: 0 })} />)}
+        </ul>
       )}
     </SpotCard>
   )
@@ -159,36 +159,31 @@ function Dues({ dues, currency, title, inv }) {
 
 function Loyal({ customers, currency, title, t }) {
   return (
-    <SpotCard icon={Crown} title={title} link="/customers">
-      {!customers.length ? <Quiet icon={Crown}>Add {t('customer').toLowerCase()} details on {t('invoice').toLowerCase()}s to see who comes back most</Quiet> : (
-        <ol className="space-y-2">
-          {customers.map((c, i) => (
-            <li key={c.id}>
-              <Link to={`/customers/${c.id}`} className="flex items-center gap-2.5 text-sm hover:text-brand">
-                <span className={`flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${i === 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-700'}`}>{i + 1}</span>
-                <span className="min-w-0 flex-1"><span className="block truncate font-semibold text-slate-800">{c.name}</span><span className="block text-xs text-slate-500">{c.bills} {t('invoice').toLowerCase()}{c.bills === 1 ? '' : 's'} · {c.visits} visits in all</span></span>
-                <b className="shrink-0 text-slate-900">{compactMoney(c.value, currency)}</b>
-              </Link>
-            </li>
+    <SpotCard icon={Crown} title={title} headline={customers[0]?.name || '—'} sub={customers[0] ? `Top ${t('customer').toLowerCase()} · last 30 days` : 'Last 30 days'} link="/customers">
+      {!customers.length ? <Quiet icon={Crown}>Add {t('customer').toLowerCase()} details on {t('invoice').toLowerCase()}s to see who comes back most.</Quiet> : (
+        <ul className="divide-y divide-slate-100">
+          {customers.slice(0, 4).map((c, i) => (
+            <Row key={c.id} to={`/customers/${c.id}`}
+              lead={<span className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${i === 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{i + 1}</span>}
+              name={c.name} note={`${c.bills} ${t('invoice').toLowerCase()}${c.bills === 1 ? '' : 's'}`} value={compactMoney(c.value, currency)} />
           ))}
-        </ol>
+        </ul>
       )}
     </SpotCard>
   )
 }
 
 function Restock({ stock, currency, title, t }) {
+  const n = stock.alerts.length
   return (
-    <SpotCard icon={PackageSearch} title={title} link="/inventory">
-      {stock.value !== undefined && <p className="mb-2 text-sm text-slate-700">Stock on hand worth <b className="text-slate-900">{money(stock.value, currency, { decimals: 0 })}</b> across {stock.skus} {t('products').toLowerCase()}</p>}
-      {!stock.alerts.length ? <Quiet>Everything is well stocked</Quiet> : (
+    <SpotCard icon={PackageSearch} title={title} headline={n ? `${n} item${n === 1 ? '' : 's'}` : 'All good'}
+      sub={stock.value !== undefined ? `Stock worth ${money(stock.value, currency, { decimals: 0 })} · ${stock.skus} ${t('products').toLowerCase()}` : `${stock.out} out · ${stock.low} low`} link="/inventory">
+      {!n ? <Quiet>Everything is well stocked.</Quiet> : (
         <ul className="divide-y divide-slate-100">
-          {stock.alerts.slice(0, 6).map((a) => (
-            <li key={a.id} className="flex items-center gap-2 py-2 text-sm">
-              {a.status === 'OUT' ? <AlertOctagon className="size-4.5 shrink-0 text-red-600" /> : <AlertTriangle className="size-4.5 shrink-0 text-amber-600" />}
-              <span className="min-w-0 flex-1 truncate font-medium text-slate-800">{a.name}</span>
-              <span className={`shrink-0 font-semibold ${a.status === 'OUT' ? 'text-red-700' : 'text-amber-800'}`}>{a.status === 'OUT' ? 'Out' : `${qty(a.qty)} left`}</span>
-            </li>
+          {stock.alerts.slice(0, 4).map((a) => (
+            <Row key={a.id} name={a.name}
+              lead={a.status === 'OUT' ? <AlertOctagon className="size-4 shrink-0 text-red-600" /> : <AlertTriangle className="size-4 shrink-0 text-amber-600" />}
+              value={a.status === 'OUT' ? 'Out of stock' : `${qty(a.qty)} left`} valueClass={a.status === 'OUT' ? 'text-red-700' : 'text-amber-800'} />
           ))}
         </ul>
       )}
@@ -197,30 +192,23 @@ function Restock({ stock, currency, title, t }) {
 }
 
 function Expiry({ expiry, title }) {
-  const tiles = [
-    { n: expiry.expired, label: 'Expired', cls: 'bg-red-50 text-red-800 ring-red-200', Icon: AlertOctagon },
-    { n: expiry.within30, label: 'In 30 days', cls: 'bg-amber-50 text-amber-900 ring-amber-200', Icon: AlertTriangle },
-    { n: expiry.within90, label: 'In 90 days', cls: 'bg-slate-50 text-slate-700 ring-slate-200', Icon: Hourglass },
+  const soon = expiry.expired + expiry.within30
+  const chips = [
+    [expiry.expired, 'expired', 'bg-red-50 text-red-800 ring-red-200'],
+    [expiry.within30, 'in 30 days', 'bg-amber-50 text-amber-900 ring-amber-200'],
+    [expiry.within90, 'in 90 days', 'bg-slate-50 text-slate-700 ring-slate-200'],
   ]
   return (
-    <SpotCard icon={CalendarClock} title={title} link="/inventory">
-      <div className="mb-3 grid grid-cols-3 gap-2">
-        {tiles.map(({ n, label, cls, Icon }) => (
-          <div key={label} className={`rounded-xl px-2 py-2 text-center ring-1 ${cls}`}>
-            <div className="flex items-center justify-center gap-1 text-xl font-extrabold"><Icon className="size-4" />{n}</div>
-            <div className="text-xs font-semibold">{label}</div>
-          </div>
-        ))}
+    <SpotCard icon={CalendarClock} title={title} headline={soon ? `${soon} batch${soon === 1 ? '' : 'es'}` : 'Nothing urgent'} sub="Expired or expiring within 30 days" link="/inventory">
+      <div className="mb-2 flex flex-wrap gap-1.5">
+        {chips.map(([n, label, cls]) => <span key={label} className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ${cls}`}>{n} {label}</span>)}
       </div>
-      {!expiry.items.length ? <Quiet>No batches expiring in the next 90 days</Quiet> : (
+      {!expiry.items.length ? <Quiet>No batches expiring in the next 90 days.</Quiet> : (
         <ul className="divide-y divide-slate-100">
-          {expiry.items.map((b) => (
-            <li key={b.id} className="flex items-center gap-2 py-2 text-sm">
-              <span className="min-w-0 flex-1"><span className="block truncate font-medium text-slate-800">{b.name}</span><span className="block text-xs text-slate-500">Batch {b.batchNo} · {qty(b.qty)} {b.unit || ''}</span></span>
-              <span className={`shrink-0 text-right text-xs font-semibold ${b.days <= 0 ? 'text-red-700' : b.days <= 30 ? 'text-amber-800' : 'text-slate-600'}`}>
-                {b.days <= 0 ? 'Expired' : `${b.days} day${b.days === 1 ? '' : 's'}`}<span className="block font-normal text-slate-500">{date(b.expiryDate)}</span>
-              </span>
-            </li>
+          {expiry.items.slice(0, 4).map((b) => (
+            <Row key={b.id} name={b.name} note={`Batch ${b.batchNo} · ${qty(b.qty)} ${b.unit || ''} · ${date(b.expiryDate)}`}
+              value={b.days <= 0 ? 'Expired' : `${b.days} day${b.days === 1 ? '' : 's'}`}
+              valueClass={b.days <= 0 ? 'text-red-700' : b.days <= 30 ? 'text-amber-800' : 'text-slate-600'} />
           ))}
         </ul>
       )}
@@ -229,21 +217,16 @@ function Expiry({ expiry, title }) {
 }
 
 function Followups({ items, title }) {
+  const late = (e) => e.followUpAt && new Date(e.followUpAt) < new Date()
+  const overdue = items.filter(late).length
   return (
-    <SpotCard icon={BellRing} title={title} link="/enquiries">
-      {!items.length ? <Quiet>No follow-ups due today</Quiet> : (
+    <SpotCard icon={BellRing} title={title} headline={items.length ? `${items.length} to do` : 'All done'} sub={overdue ? `${overdue} overdue` : 'Due today'} link="/enquiries">
+      {!items.length ? <Quiet>No follow-ups due today.</Quiet> : (
         <ul className="divide-y divide-slate-100">
-          {items.slice(0, 6).map((e) => {
-            const late = e.followUpAt && new Date(e.followUpAt) < new Date()
-            return (
-              <li key={e.id}>
-                <Link to={`/enquiries/${e.id}`} className="flex items-center gap-2 py-2 text-sm hover:text-brand">
-                  <span className="min-w-0 flex-1"><span className="block truncate font-semibold text-slate-800">{e.name || e.phone || 'Enquiry'}</span><span className="block truncate text-xs text-slate-500">{e.nextAction || e.itemText || e.summary || e.message || e.source}</span></span>
-                  <span className={`shrink-0 text-xs font-semibold ${late ? 'text-red-700' : 'text-slate-600'}`}>{late ? 'Overdue' : 'Today'}</span>
-                </Link>
-              </li>
-            )
-          })}
+          {items.slice(0, 4).map((e) => (
+            <Row key={e.id} to={`/enquiries/${e.id}`} name={e.name || e.phone || 'Enquiry'} note={e.nextAction || e.itemText || e.summary || e.message || e.source}
+              value={late(e) ? 'Overdue' : 'Today'} valueClass={late(e) ? 'text-red-700' : 'text-slate-600'} />
+          ))}
         </ul>
       )}
     </SpotCard>

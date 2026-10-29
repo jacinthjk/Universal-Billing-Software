@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom'
 import {
-  Search, UserPlus, PackagePlus, ShoppingBag, BarChart3, Banknote, QrCode, CreditCard, Wallet, Landmark, User, Users, Trophy, Crown,
+  Search, UserPlus, PackagePlus, ShoppingBag, BarChart3, Banknote, QrCode, CreditCard, Wallet, Landmark, Users, Trophy,
   BellRing, PackageX, AlertTriangle, CheckCircle2, ArrowRight, TrendingUp, TrendingDown, Gauge, PiggyBank, HandCoins, CalendarClock,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { useBusinessIcons, CategoryIcon } from '../lib/businessIcons'
+import { useBusinessIcons } from '../lib/businessIcons'
 import { Spinner, useFetch } from '../components/ui'
 import DashboardSpotlight from '../components/DashboardSpotlight'
 import { MyAttendance } from './Staff'
@@ -45,183 +45,96 @@ function Greeting({ name }) {
   )
 }
 
-// ─────────────── Today at a glance (four picture cards) ───────────────
-// One headline sentence, then four equal cards - each tells one thing with one picture:
-// a speedometer (how the day is going), a money jar (how people paid), a crowd (who came), a podium (what sold).
+// ─────────────── Today at a glance (one summary panel) ───────────────
+// Four columns in one card: sales against a usual day, money by payment type, customers, top sellers.
 
-function GlanceCard({ icon: Icon, title, tint, children, value, caption }) {
-  return (
-    <div className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 transition hover:shadow-md">
-      <div className="flex items-center gap-2">
-        <span className="flex size-8 items-center justify-center rounded-lg" style={{ background: `${tint}1f`, color: tint }}><Icon className="size-4.5" /></span>
-        <h3 className="text-[0.9375rem] font-bold text-slate-800">{title}</h3>
-      </div>
-      <div className="flex h-28 items-center justify-center py-2 sm:h-36">{children}</div>
-      <div className="mt-auto border-t border-slate-100 pt-2.5 text-center">
-        <div className="text-xl font-extrabold tracking-tight text-slate-900">{value}</div>
-        <div className="text-sm text-slate-600">{caption}</div>
-      </div>
-    </div>
-  )
-}
-
-// Speedometer: needle shows today against a usual day (100% mark), scale runs to 150%.
-function Speedometer({ pct }) {
-  const f = Math.min(pct / 1.5, 1)
-  const point = (fr, r) => { const a = Math.PI * (1 - fr); return [100 + r * Math.cos(a), 100 - r * Math.sin(a)] }
-  const [ix, iy] = point(2 / 3, 70)
-  const [tx, ty] = point(2 / 3, 98)
-  const arc = 'M20 100 A80 80 0 0 1 180 100'
-  return (
-    <svg viewBox="0 0 200 118" className="h-full w-full max-w-56" role="img" aria-label={`${Math.round(pct * 100)}% of a usual day`}>
-      <path d={arc} fill="none" stroke="#e2e8f0" strokeWidth="16" strokeLinecap="round" />
-      {f > 0 && (
-        <path d={arc} fill="none" stroke="var(--brand)" strokeWidth="16" strokeLinecap="round" pathLength="100"
-          strokeDasharray={`${f * 100} 100`} className="transition-[stroke-dasharray] duration-700" />
-      )}
-      <line x1={ix} y1={iy} x2={tx} y2={ty} stroke="#0f172a" strokeWidth="3" strokeLinecap="round" />
-      <text x={tx + 4} y={ty - 2} fontSize="11" fontWeight="700" fill="#334155">usual</text>
-      <g style={{ transform: `rotate(${f * 180 - 90}deg)`, transformOrigin: '100px 100px' }} className="transition-transform duration-700">
-        <path d="M100 34 L105 100 L95 100 Z" fill="#0f172a" />
-      </g>
-      <circle cx="100" cy="100" r="9" fill="#0f172a" />
-      <circle cx="100" cy="100" r="3.5" fill="white" />
-    </svg>
-  )
-}
-
+// Payment types keep a fixed colour (validated categorical palette), never by rank.
 const PAY = { CASH: [Banknote, '#1baf7a', 'Cash'], UPI: [QrCode, '#2a78d6', 'UPI'], CARD: [CreditCard, '#eb6834', 'Card'], BANK: [Landmark, '#4a3aa7', 'Bank'], ONLINE: [Wallet, '#e87ba4', 'Online'] }
 const payMeta = (m) => PAY[m] || [Wallet, '#94a3b8', m]
 
-// Money jar: filled in layers, one colour per way of paying; legend beside it.
-function MoneyJar({ payments, currency }) {
-  const total = payments.reduce((s, p) => s + p.amount, 0)
-  const body = 'M30 34 h60 q12 0 12 12 v72 q0 14 -14 14 h-56 q-14 0 -14 -14 v-72 q0 -12 12 -12 z'
-  const fillH = total ? 86 : 0
-  // stack layers from the jar's bottom (y=132) upwards
-  const layers = payments.reduce((acc, p) => {
-    const h = (p.amount / total) * fillH
-    const top = (acc.length ? acc[acc.length - 1].y : 132) - h
-    return [...acc, { method: p.method, y: top, h }]
-  }, [])
+function Cell({ icon: Icon, label, children, className = '' }) {
   return (
-    <div className="flex h-full items-center gap-3">
-      <svg viewBox="0 0 120 140" className="h-full shrink-0" role="img" aria-label="Money received by payment type">
-        <defs><clipPath id="jar-clip"><path d={body} /></clipPath></defs>
-        <rect x="32" y="16" width="56" height="14" rx="4" fill="var(--brand-2)" />
-        <rect x="36" y="28" width="48" height="7" rx="2" fill="#cbd5e1" />
-        <g clipPath="url(#jar-clip)">
-          <rect x="0" y="0" width="120" height="140" fill="#f8fafc" />
-          {layers.map((l) => <rect key={l.method} x="0" y={l.y} width="120" height={l.h + 0.5} fill={payMeta(l.method)[1]} />)}
-        </g>
-        <path d={body} fill="none" stroke="#94a3b8" strokeWidth="3" />
-        <rect x="26" y="48" width="6" height="56" rx="3" fill="white" opacity="0.45" />
-      </svg>
-      {total ? (
-        <ul className="space-y-1.5">
-          {payments.map((p) => {
-            const [Icon, color, label] = payMeta(p.method)
-            return (
-              <li key={p.method} className="flex items-center gap-1.5 text-sm">
-                <Icon className="size-4 shrink-0" style={{ color }} />
-                <span className="text-slate-600">{label}</span>
-                <b className="text-slate-900">{money(p.amount, currency, { decimals: 0 })}</b>
-              </li>
-            )
-          })}
-        </ul>
-      ) : <p className="max-w-32 text-sm text-slate-600">Fills up as payments come in</p>}
+    <div className={`min-w-0 p-4 sm:p-5 ${className}`}>
+      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-600"><Icon className="size-4 text-slate-400" />{label}</div>
+      {children}
     </div>
   )
 }
 
-// Crowd: a little figure for each visit - green for new faces, purple for returning ones.
-function Crowd({ customers }) {
-  const MAX = 15
-  const figures = [...Array(customers.new).fill('new'), ...Array(customers.repeat).fill('repeat')]
-  if (!figures.length) return <div className="flex flex-col items-center gap-1 text-sm text-slate-600"><Users className="size-12 text-slate-300" />No visits yet</div>
+// Segmented bar: one segment per part, 2px surface gap between them, legend underneath.
+function SplitBar({ parts, empty }) {
+  const total = parts.reduce((s, p) => s + p.value, 0)
+  if (!total) return <div className="h-2.5 rounded-full bg-slate-100" title={empty} />
   return (
-    <div className="flex max-w-56 flex-wrap items-end justify-center gap-0.5" role="img" aria-label={`${customers.new} new and ${customers.repeat} returning`}>
-      {figures.slice(0, MAX).map((kind, i) => (
-        <User key={i} className={`size-8 ${kind === 'new' ? 'fill-emerald-200 text-emerald-600' : 'fill-violet-200 text-violet-600'}`} strokeWidth={2} />
-      ))}
-      {figures.length > MAX && <span className="ml-1 self-center rounded-full bg-slate-100 px-2 py-0.5 text-sm font-bold text-slate-700">+{figures.length - MAX}</span>}
-    </div>
-  )
-}
-
-// Podium: today's top three by value, gold in the middle.
-const PODIUM = [
-  { rank: 2, h: 'h-12', block: 'bg-slate-300', ring: 'ring-slate-300' },
-  { rank: 1, h: 'h-18', block: 'bg-amber-400', ring: 'ring-amber-400' },
-  { rank: 3, h: 'h-8', block: 'bg-orange-300', ring: 'ring-orange-300' },
-]
-function Podium({ top }) {
-  if (!top.length) return <div className="flex flex-col items-center gap-1 text-sm text-slate-600"><Trophy className="size-12 text-slate-300" />No sales yet</div>
-  return (
-    <div className="flex w-full max-w-60 items-end justify-center gap-1.5">
-      {PODIUM.map(({ rank, h, block, ring }) => {
-        const p = top[rank - 1]
-        return (
-          <div key={rank} className="flex min-w-0 flex-1 flex-col items-center">
-            {p && (
-              <>
-                <span className={`flex size-9 items-center justify-center rounded-full bg-white text-slate-700 ring-2 ${ring}`} title={p.name}>
-                  {rank === 1 ? <Crown className="size-5 text-amber-500" /> : <CategoryIcon name={p.category} className="size-4.5" />}
-                </span>
-                <span className="mt-1 w-full truncate text-center text-xs font-semibold text-slate-700" title={p.name}>{p.name}</span>
-              </>
-            )}
-            <div className={`mt-1 flex w-full items-start justify-center rounded-t-lg pt-0.5 text-lg font-extrabold text-white ${h} ${p ? block : 'bg-slate-100'}`}>{rank}</div>
-          </div>
-        )
-      })}
+    <div className="flex h-2.5 gap-[2px] overflow-hidden rounded-full">
+      {parts.filter((p) => p.value > 0).map((p) => <span key={p.key} className="h-full" style={{ width: `${(p.value / total) * 100}%`, background: p.color }} title={`${p.label}: ${p.text}`} />)}
     </div>
   )
 }
 
 function TodayAtAGlance({ m }) {
   const { currency, t } = useAuth()
+  const inv = t('invoice').toLowerCase()
   const past = m.trend.slice(-8, -1)
   const usual = past.length ? past.reduce((s, d) => s + d.sales, 0) / past.length : 0
-  const pct = usual > 0 ? m.sales.net / usual : m.sales.net > 0 ? 1 : 0
-  const up = pct >= 1
-  const inv = t('invoice').toLowerCase()
-  const visits = m.customers.new + m.customers.repeat
-  const paidTotal = m.payments.reduce((s, p) => s + p.amount, 0)
-  const top = m.topByValue.slice(0, 3)
+  const pct = usual > 0 ? m.sales.net / usual : 0
+  const up = usual > 0 && pct >= 1
   const mood = usual <= 0 ? (m.sales.net > 0 ? 'Off to a good start' : 'Waiting for the first sale')
-    : up ? 'Busier than a usual day' : pct >= 0.6 ? 'Getting close to a usual day' : 'Quieter than usual so far'
+    : up ? 'Busier than a usual day' : pct >= 0.6 ? 'Close to a usual day' : 'Quieter than usual so far'
+  const paid = m.payments.reduce((s, p) => s + p.amount, 0)
+  const pays = m.payments.map((p) => { const [, color, label] = payMeta(p.method); return { key: p.method, label, color, value: p.amount, text: money(p.amount, currency, { decimals: 0 }) } })
+  const visits = m.customers.new + m.customers.repeat
+  const top = m.topByValue.slice(0, 3)
   return (
     <section aria-labelledby="glance-title">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 id="glance-title" className="text-lg font-bold text-slate-800">Today at a glance</h2>
         <Link to="/reports" className="inline-flex items-center gap-1 text-sm font-semibold text-brand">Full reports <ArrowRight className="size-4" /></Link>
       </div>
-      <p className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-slate-700">
-        So far you have taken <b className="text-xl text-slate-900">{money(m.sales.net, currency, { decimals: 0 })}</b>
-        from <b className="text-slate-900">{m.sales.bills}</b> {inv}{m.sales.bills === 1 ? '' : 's'}.
-        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-sm font-semibold ${up ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
-          {up ? <TrendingUp className="size-4" /> : <TrendingDown className="size-4" />}{mood}
-        </span>
-      </p>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <GlanceCard icon={Gauge} title="Today's pace" tint="#2a78d6"
-          value={usual > 0 ? `${Math.round(pct * 100)}%` : '-'} caption={usual > 0 ? `of a usual day (${money(usual, currency, { decimals: 0 })})` : 'Not enough history yet'}>
-          <Speedometer pct={pct} />
-        </GlanceCard>
-        <GlanceCard icon={PiggyBank} title="Money received" tint="#1baf7a"
-          value={money(paidTotal, currency, { decimals: 0 })} caption={`avg ${money(m.sales.avgBill, currency, { decimals: 0 })} per ${inv}`}>
-          <MoneyJar payments={m.payments} currency={currency} />
-        </GlanceCard>
-        <GlanceCard icon={Users} title={`${t('customers')} today`} tint="#7c3aed"
-          value={visits} caption={<><span className="text-emerald-700">● {m.customers.new} new</span> · <span className="text-violet-700">● {m.customers.repeat} returning</span></>}>
-          <Crowd customers={m.customers} />
-        </GlanceCard>
-        <GlanceCard icon={Trophy} title="Top sellers" tint="#d97706"
-          value={top[0] ? money(top[0].value, currency, { decimals: 0 }) : '-'} caption={top[0] ? `${top[0].name} leads today` : `Your top ${t('products').toLowerCase()} appear here`}>
-          <Podium top={top} />
-        </GlanceCard>
+      <div className="card grid grid-cols-2 divide-slate-100 lg:grid-cols-[1.35fr_1fr_1fr_1.15fr] lg:divide-x [&>*]:border-slate-100">
+        <Cell icon={Gauge} label="Sales so far" className="col-span-2 border-b lg:col-span-1 lg:border-b-0">
+          <div className="text-[2rem] font-extrabold leading-none tracking-tight text-slate-900">{money(m.sales.net, currency, { decimals: 0 })}</div>
+          <div className="mt-1.5 text-sm text-slate-600">{m.sales.bills} {inv}{m.sales.bills === 1 ? '' : 's'} · avg {money(m.sales.avgBill, currency, { decimals: 0 })}</div>
+          <div className="mt-3">
+            <div className="relative h-2 rounded-full bg-slate-100" role="img" aria-label={usual > 0 ? `${Math.round(pct * 100)}% of a usual day` : 'No usual day yet'}>
+              <div className={`h-2 rounded-full transition-[width] duration-700 ${up ? 'bg-emerald-500' : 'bg-brand'}`} style={{ width: `${Math.min(pct / 1.5, 1) * 100}%` }} />
+              {usual > 0 && <span className="absolute -top-1 h-4 w-0.5 rounded bg-slate-500" style={{ left: `${(1 / 1.5) * 100}%` }} title={`Usual day: ${money(usual, currency, { decimals: 0 })}`} />}
+            </div>
+            <div className={`mt-1.5 flex items-center gap-1 text-sm font-semibold ${up ? 'text-emerald-700' : 'text-slate-600'}`}>
+              {up ? <TrendingUp className="size-4" /> : <TrendingDown className="size-4" />}{mood}
+              {usual > 0 && <span className="font-normal text-slate-500">· {Math.round(pct * 100)}% of usual</span>}
+            </div>
+          </div>
+        </Cell>
+        <Cell icon={PiggyBank} label="Money received" className="border-r">
+          <div className="text-xl font-extrabold text-slate-900">{money(paid, currency, { decimals: 0 })}</div>
+          <div className="mt-2.5"><SplitBar parts={pays} empty="No payments yet" /></div>
+          <ul className="mt-2 space-y-0.5 text-sm">
+            {pays.length ? pays.slice(0, 3).map((p) => <li key={p.key} className="flex items-center gap-1.5"><span className="size-2 shrink-0 rounded-full" style={{ background: p.color }} /><span className="text-slate-600">{p.label}</span><b className="ml-auto text-slate-800">{p.text}</b></li>)
+              : <li className="text-slate-500">No payments yet</li>}
+          </ul>
+        </Cell>
+        <Cell icon={Users} label={`${t('customers')} today`}>
+          <div className="text-xl font-extrabold text-slate-900">{visits}</div>
+          <div className="mt-2.5"><SplitBar parts={[{ key: 'new', label: 'New', color: '#1baf7a', value: m.customers.new, text: String(m.customers.new) }, { key: 'repeat', label: 'Returning', color: '#7c3aed', value: m.customers.repeat, text: String(m.customers.repeat) }]} empty="No visits yet" /></div>
+          <ul className="mt-2 space-y-0.5 text-sm">
+            <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-[#1baf7a]" /><span className="text-slate-600">New</span><b className="ml-auto text-slate-800">{m.customers.new}</b></li>
+            <li className="flex items-center gap-1.5"><span className="size-2 rounded-full bg-[#7c3aed]" /><span className="text-slate-600">Returning</span><b className="ml-auto text-slate-800">{m.customers.repeat}</b></li>
+          </ul>
+        </Cell>
+        <Cell icon={Trophy} label="Top sellers" className="col-span-2 border-t lg:col-span-1 lg:border-t-0">
+          {top.length ? (
+            <ol className="space-y-1.5">
+              {top.map((p, i) => (
+                <li key={p.productId || p.name} className="flex items-center gap-2 text-sm">
+                  <span className={`flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${i === 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'}`}>{i + 1}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium text-slate-800" title={p.name}>{p.name}</span>
+                  <b className="shrink-0 text-slate-900">{money(p.value, currency, { decimals: 0 })}</b>
+                </li>
+              ))}
+            </ol>
+          ) : <p className="text-sm text-slate-500">Your best-selling {t('products').toLowerCase()} appear here.</p>}
+        </Cell>
       </div>
     </section>
   )

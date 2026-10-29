@@ -7,7 +7,7 @@ const { validate } = require('../middleware/validate');
 const { requireAuth, signToken } = require('../middleware/auth');
 const { withDefaults } = require('../lib/businessConfig');
 
-const publicUser = (u) => ({ id: u.id, name: u.name, email: u.email, phone: u.phone, isPlatformAdmin: u.isPlatformAdmin });
+const publicUser = (u) => ({ id: u.id, name: u.name, email: u.email, phone: u.phone, isPlatformAdmin: u.isPlatformAdmin, mustChangePassword: u.mustChangePassword });
 
 async function memberships(userId) {
   const rows = await prisma.membership.findMany({
@@ -56,7 +56,9 @@ router.put('/me', requireAuth, validate(z.object({
   if (req.body.phone !== undefined) data.phone = req.body.phone;
   if (req.body.newPassword) {
     if (!req.body.currentPassword || !(await bcrypt.compare(req.body.currentPassword, req.user.passwordHash))) throw badRequest('Current password is incorrect');
+    if (await bcrypt.compare(req.body.newPassword, req.user.passwordHash)) throw badRequest('Choose a password different from the temporary one');
     data.passwordHash = await bcrypt.hash(req.body.newPassword, 12);
+    data.mustChangePassword = false;
   }
   const user = await prisma.user.update({ where: { id: req.user.id }, data });
   res.json({ user: publicUser(user) });

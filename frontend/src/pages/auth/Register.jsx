@@ -29,13 +29,13 @@ export default function Register() {
 
   return (
     <AuthShell title="Create your account" subtitle="Set up your business in under two minutes">
-      <form onSubmit={submit} className="space-y-4">
+      <form onSubmit={submit} className="space-y-4 rounded-2xl bg-white p-6 shadow-[0_10px_40px_-12px_rgba(15,23,42,0.25)] ring-1 ring-slate-200/70">
         <Field label="Your name"><Input required value={form.name} onChange={set('name')} /></Field>
         <Field label="Email"><Input type="email" required value={form.email} onChange={set('email')} /></Field>
         <Field label="Password" hint="At least 8 characters"><Input type="password" minLength={8} required value={form.password} onChange={set('password')} /></Field>
-        <Button type="submit" className="w-full" size="lg" loading={busy}>Create account</Button>
+        <Button type="submit" className="w-full !bg-gradient-to-r from-blue-600 to-indigo-600 !text-white" size="lg" loading={busy}>Create account</Button>
+        <p className="text-center text-sm text-slate-600">Already registered? <Link to="/login" className="font-semibold text-blue-700 hover:underline">Log in</Link></p>
       </form>
-      <p className="mt-4 text-center text-sm text-slate-500">Already registered? <Link to="/login" className="font-medium text-brand">Log in</Link></p>
     </AuthShell>
   )
 }

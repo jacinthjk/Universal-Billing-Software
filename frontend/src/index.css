@@ -68,3 +68,15 @@ body {
 @media print {
   .no-print { display: none !important; }
 }
+
+/* Login / sign-up: deep navy story panel with a faint grid and softly floating app previews. */
+.auth-hero { background: radial-gradient(120% 90% at 0% 0%, #1e3a8a 0%, #0f172a 55%, #020617 100%); }
+.auth-grid {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse at 30% 40%, black 30%, transparent 75%);
+}
+@keyframes auth-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+.auth-float { animation: auth-float 6s ease-in-out infinite; }
+.auth-float-slow { animation: auth-float 8s ease-in-out infinite 1s; }
+@media (prefers-reduced-motion: reduce) { .auth-float, .auth-float-slow { animation: none; } }
